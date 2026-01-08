@@ -1,0 +1,170 @@
+.dashboardContainer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+    flex: 1
+}
+
+.card {
+    background: white;
+    border-radius: 1.5rem;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    padding: 2.5rem;
+    width: 100%;
+    max-width: 480px;
+    font-family: 'Inter', sans-serif;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.header {
+    text-align: center;
+}
+
+.title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1a202c;
+    margin: 0 0 0.5rem 0;
+}
+
+.subtitle {
+    font-size: 0.95rem;
+    color: #64748b;
+    margin: 0;
+}
+
+.scoreBanner {
+    background: #fef2f2;
+    border-radius: 1rem;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid #fee2e2;
+}
+
+.scoreLabel {
+    font-size: 0.875rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.scoreBadge {
+    background: #ef4444;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+}
+
+.scoreValue {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #ef4444;
+}
+
+.statsGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.statTile {
+    background: #f5f3ff;
+    border: 1px solid #ede9fe;
+    border-radius: 1rem;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.statLabel {
+    font-size: 0.875rem;
+    color: #7c3aed;
+    font-weight: 600;
+}
+
+.statValue {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: #1a202c;
+}
+
+.breakdownSection {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.sectionTitle {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1a202c;
+    margin: 0;
+}
+
+.breakdownList {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.breakdownItem {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.breakdownHeader {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #4b5563;
+}
+
+.progressBar {
+    height: 8px;
+    background: #f1f5f9;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.progressFill {
+    height: 100%;
+    background: #3b82f6;
+    border-radius: 999px;
+}
+
+.ctaButton {
+    background: linear-gradient(to right, #2563eb, #3b82f6) !important;
+    color: white !important;
+    padding: 1rem !important;
+    border-radius: 999px !important;
+    font-weight: 600 !important;
+    text-transform: none !important;
+    font-size: 1rem !important;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2) !important;
+    transition: transform 0.2s ease !important;
+}
+
+.ctaButton:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3) !important;
+}
+
+
+@media (max-width:442px) {
+    .dashboardContainer {
+
+        padding: 0rem;
+
+    }
+
+}

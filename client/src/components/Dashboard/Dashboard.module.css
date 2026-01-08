@@ -1,0 +1,133 @@
+.pageWrapper {
+    @apply min-h-screen bg-slate-50 dark:bg-slate-900 pb-20;
+}
+
+.dashboardContainer {
+    @apply w-full mx-auto px-3 pt-6;
+    /* Mobile: stacked layout */
+    @apply flex flex-col gap-4;
+}
+
+/* Tablet and up: side-by-side */
+@media (min-width: 768px) {
+    .dashboardContainer {
+        @apply flex-row gap-4 pt-6 px-4;
+    }
+}
+
+/* Desktop: slightly more spacing */
+@media (min-width: 1024px) {
+    .dashboardContainer {
+        @apply gap-6 px-6;
+    }
+}
+
+/* Large screens: max width to prevent too wide */
+@media (min-width: 1440px) {
+    .dashboardContainer {
+        @apply max-w-[1400px] px-8;
+    }
+}
+
+/* Left Sidebar */
+.dashboardContainer>section:first-child {
+    @apply w-full flex-shrink-0;
+}
+
+/* Tablet: fixed sidebar width */
+@media (min-width: 768px) {
+    .dashboardContainer>section:first-child {
+        @apply w-64 sticky top-24 self-start;
+    }
+}
+
+/* Desktop: wider sidebar */
+@media (min-width: 1024px) {
+    .dashboardContainer>section:first-child {
+        @apply w-72;
+    }
+}
+
+/* Right Content Area */
+.reportsSection {
+    @apply flex-1 min-w-0;
+}
+
+.reportsSection h2 {
+    @apply text-xl font-bold text-slate-800 dark:text-white mb-4;
+}
+
+@media (min-width: 768px) {
+    .reportsSection h2 {
+        @apply text-2xl mb-6;
+    }
+}
+
+.loadingContainer {
+    @apply min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900;
+}
+
+.loader {
+    @apply flex flex-col items-center justify-center p-8 text-slate-500;
+}
+
+@media (min-width: 768px) {
+    .loader {
+        @apply p-12;
+    }
+}
+
+.loaderText {
+    @apply mt-4 text-sm font-medium animate-pulse;
+}
+
+/* Empty State */
+.emptyState {
+    @apply flex flex-col items-center justify-center py-16 text-center px-4;
+}
+
+@media (min-width: 768px) {
+    .emptyState {
+        @apply py-24 px-0;
+    }
+}
+
+.emptyIcon {
+    @apply w-24 h-24 rounded-full bg-blue-50 border-4 border-dashed border-blue-200 flex items-center justify-center mb-4;
+}
+
+@media (min-width: 768px) {
+    .emptyIcon {
+        @apply w-32 h-32 mb-6;
+    }
+}
+
+.emptyIcon svg {
+    @apply w-12 h-12 text-blue-300;
+}
+
+@media (min-width: 768px) {
+    .emptyIcon svg {
+        @apply w-16 h-16;
+    }
+}
+
+.emptyText {
+    @apply text-base text-slate-500 mb-4;
+}
+
+@media (min-width: 768px) {
+    .emptyText {
+        @apply text-lg mb-6;
+    }
+}
+
+.emptyButton {
+    @apply px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition-all text-sm;
+}
+
+@media (min-width: 768px) {
+    .emptyButton {
+        @apply px-8 py-3 text-base;
+    }
+}

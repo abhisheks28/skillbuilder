@@ -1,0 +1,86 @@
+"use client"
+
+import { useState, useEffect, useCallback } from 'react'
+import { ViolationType, ViolationEvent, ViolationLog, BrowserInfo } from '../types'
+// Firebase removed during backend migration
+// import { db, auth } from '@/backend/firebaseHandler'
+// import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore'
+import { useAuth } from '@/context/AuthContext'
+
+interface UseViolationLoggerProps {
+    testType: 'speed-test' | 'assessment'
+    testId: string
+    enabled: boolean
+}
+
+export function useViolationLogger({ testType, testId, enabled }: UseViolationLoggerProps) {
+    const { user, activeChild, activeChildId } = useAuth()
+    const [sessionId] = useState(() => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
+    const [violations, setViolations] = useState<ViolationEvent[]>([])
+    const [sessionDocId, setSessionDocId] = useState<string | null>(null)
+    const [startTime] = useState(new Date())
+
+    // Get browser information
+    const getBrowserInfo = useCallback((): BrowserInfo => {
+        return {
+            userAgent: navigator.userAgent,
+            platform: navigator.platform,
+            language: navigator.language,
+            screenResolution: `${window.screen.width}x${window.screen.height}`
+        }
+    }, [])
+
+    // Initialize session (Mock)
+    useEffect(() => {
+        if (!enabled || !user) return
+
+        const initializeSession = async () => {
+            // Mock initialization
+            console.log('📝 Security session initialized (Local):', sessionId)
+            setSessionDocId(`mock_doc_${sessionId}`)
+        }
+
+        initializeSession()
+    }, [enabled, user, activeChildId, activeChild, testType, testId, sessionId, startTime, getBrowserInfo])
+
+    // Log a violation
+    const logViolation = useCallback(async (
+        type: ViolationType,
+        details: string,
+        warningShown: boolean = false
+    ) => {
+        if (!enabled || !sessionDocId) return
+
+        const violation: ViolationEvent = {
+            type,
+            timestamp: new Date(),
+            details,
+            warningShown
+        }
+
+        setViolations(prev => {
+            const updated = [...prev, violation]
+            // Firebase update removed
+            return updated
+        })
+
+        console.log(`🚨 Violation logged: ${type} - ${details}`)
+    }, [enabled, sessionDocId])
+
+    // End session
+    const endSession = useCallback(async (autoSubmitted: boolean = false) => {
+        if (!enabled || !sessionDocId) return
+
+        console.log('✅ Security session ended (Local):', sessionId, {
+            autoSubmitted,
+            totalViolations: violations.length
+        })
+    }, [enabled, sessionDocId, violations.length, sessionId])
+
+    return {
+        logViolation,
+        endSession,
+        violations,
+        sessionId
+    }
+}

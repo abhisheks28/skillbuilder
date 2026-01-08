@@ -1,0 +1,288 @@
+.quizContainer {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin: 0 auto;
+    padding: 20px;
+    background: #ffffff;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.questionNumber {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #2563eb;
+    background: #eff6ff;
+    padding: 8px 16px;
+    border-radius: 12px;
+}
+
+.topicTitle {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #94a3b8;
+    font-weight: 600;
+}
+
+.questionText {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 32px;
+    text-align: center;
+}
+
+/* --- New SVG / Absolute Layout --- */
+
+.treeScrollContainer {
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+    overflow-x: auto;
+    width: 100%;
+    /* Ensure minimal height so it doesn't collapse */
+    min-height: 400px;
+}
+
+.treeCanvas {
+    position: relative;
+    /* width/height injected inline */
+    margin: 0 auto;
+}
+
+.svgLayer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    /* Below nodes */
+    pointer-events: none;
+}
+
+.connectorLine {
+    stroke: #dc2626;
+    /* Red-600 */
+    stroke-width: 2px;
+}
+
+/* Node Styles */
+.nodeAbsolute {
+    position: absolute;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    z-index: 2;
+    /* Above SVG */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transform: translate(-50%, -50%);
+    /* Center coordinate on x,y */
+    /* Note: In JSX calc, I used left=x, top=y. 
+       If I want x,y to be the CENTER of the node, I should transform. 
+       In my JSX calculation:
+         x1 = x + NODE_WIDTH/2
+       This implies x,y is Top-Left. 
+       So no translate needed unless algorithm changed.
+       Let's stick to Top-Left logic for simplicity as coded in JSX.
+    */
+    transform: none;
+}
+
+/* Yellow Box (Composite/Parent) */
+.compositeNode {
+    background: #fef08a;
+    /* Yellow-200/300 */
+    color: #000;
+    border: 2px solid #eab308;
+    /* Yellow-500 */
+    border-radius: 8px;
+}
+
+/* Green Circle (Prime/Leaf) */
+.primeNode {
+    background: #86efac;
+    /* Green-300 */
+    color: #000;
+    border: 2px solid #22c55e;
+    /* Green-500 */
+    border-radius: 50%;
+}
+
+/* Input Styling */
+.inputField {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    text-align: center;
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    color: inherit;
+    border-radius: inherit;
+    /* Follow parent shape */
+}
+
+.inputField:focus {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.staticText {
+    pointer-events: none;
+}
+
+
+/* Navigation */
+.navigationContainer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 2px solid #f1f5f9;
+}
+
+/* Standardized Navigation Buttons matching TypeMCQ */
+.submitButton {
+    background: linear-gradient(135deg, #16a34a, #15803d) !important;
+    color: white !important;
+    text-transform: none !important;
+    font-weight: 700 !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 4px 6px -1px rgba(22, 163, 74, 0.4) !important;
+    padding: 0.875rem 2rem !important;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.1rem;
+    transition: all 0.3s ease;
+}
+
+.submitButton:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(22, 163, 74, 0.5) !important;
+}
+
+.nextButton {
+    background: #2563eb !important;
+    color: white !important;
+    text-transform: none !important;
+    font-weight: 600 !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3) !important;
+    padding: 12px 32px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.1rem;
+    transition: all 0.3s ease;
+    margin-left: auto;
+}
+
+.nextButton:hover {
+    background: #1d4ed8 !important;
+}
+
+.previousButton {
+    background: white !important;
+    color: #2563eb !important;
+    border: 1px solid #2563eb !important;
+    text-transform: none !important;
+    font-weight: 600 !important;
+    border-radius: 0.5rem !important;
+    padding: 12px 24px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.1rem;
+    margin-right: auto;
+}
+
+/* Navigation Container - Hidden by default on desktop because sidebar handles it */
+.navigationContainer {
+    display: none;
+}
+
+/* Hide navigation explicitly on desktop - buttons are in the sidebar palette */
+@media (min-width: 1025px) {
+    .navigationContainer {
+        display: none !important;
+    }
+}
+
+/* Responsive Navigation inspired by TypeMCQ */
+@media (max-width: 1024px) {
+    .navigationContainer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 40px;
+        padding-top: 24px;
+        border-top: 2px solid #f1f5f9;
+        gap: 1rem;
+    }
+
+    /* ... existing content ... */
+
+    .leftButtons {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 640px) {
+    .quizContainer {
+        border-radius: 0;
+        height: 100%;
+        display: block;
+        box-shadow: none;
+        overflow-y: auto;
+        padding-bottom: 80px;
+        /* Space for fixed navigation */
+    }
+
+    .navigationContainer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background: white;
+        padding: 0.75rem 1rem;
+        gap: 0.75rem;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border-top: 1px solid #e5e7eb;
+        z-index: 100;
+        box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
+        margin-top: 0;
+    }
+
+    .leftButtons {
+        gap: 0.5rem;
+        width: 100%;
+    }
+
+    .nextButton,
+    .submitButton,
+    .previousButton {
+        padding: 0.35rem 0.75rem !important;
+        font-size: 0.85rem !important;
+        min-height: 35px !important;
+        width: 100%;
+        justify-content: center;
+        margin: 0 !important;
+        /* Override margin-left: auto */
+    }
+}

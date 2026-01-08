@@ -1,0 +1,8 @@
+.modalContent {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100dvh;
+    width: 100dvw;
+    outline: none;
+}

@@ -1,0 +1,1857 @@
+"use client";
+import React, { useContext, useEffect, useState } from "react";
+import Styles from "./QuizResult.module.css";
+import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from "recharts";
+
+// ... existing code ...
+
+const HeroChart = ({ summary, notAttempted }) => {
+    const data = [
+        {
+            name: 'Performance',
+            correct: summary.correct,
+            wrong: summary.wrong,
+            skipped: notAttempted,
+            totalTime: summary.totalTime || 0,
+        },
+    ];
+
+    return (
+        <div className={Styles.heroChartContainer}>
+            <ResponsiveContainer width="100%" height="100%">
+                <BarChart layout="vertical" data={data} barSize={20}>
+                    <XAxis type="number" hide domain={[0, 'dataMax']} />
+                    <YAxis type="category" dataKey="name" hide />
+                    <RechartsTooltip
+                        cursor={{ fill: 'transparent' }}
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    />
+                    <Bar dataKey="correct" stackId="a" fill="#16a34a" radius={[4, 0, 0, 4]} />
+                    <Bar dataKey="wrong" stackId="a" fill="#dc2626" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="skipped" stackId="a" fill="#d97706" radius={[0, 4, 4, 0]} />
+                </BarChart>
+            </ResponsiveContainer>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>
+                <span>{Number(summary.correct).toFixed(2)} Correct</span>
+                <span>{Number(summary.wrong).toFixed(2)} Wrong</span>
+            </div>
+        </div>
+    );
+};
+
+import Header from "@/pages/homepage/Header";
+import MathRenderer from "@/components/MathRenderer/MathRenderer.component";
+import TypeFactorTree from "@/components/QuestionTypes/TypeFactorTree/TypeFactorTree.component";
+import { CheckCircle, XCircle, HelpCircle, Clock, Target, BookOpen, TrendingUp, BarChart3, FileText, X, AlertCircle, Download, ArrowLeft } from "lucide-react";
+import { QuizSessionContext } from "@/context/QuizSessionContext";
+import analyzeResponses from "@/utils/workload/GenerateReport";
+import Footer from "@/components/Footer/Footer.component";
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { getUserDatabaseKey } from "@/utils/authUtils";
+// Note: Keeping getUserDatabaseKey if used for deriving user key/phone logic, but removing database refs.
+import { Button, Dialog, DialogTitle, DialogContent, IconButton, CircularProgress, TextField, MenuItem, Link as MuiLink, Select, FormControl, InputLabel } from "@mui/material";
+import { useAuth } from "@/context/AuthContext";
+// import { ref, get, set, update } from "firebase/database";
+
+
+const formatAnswer = (answer) => {
+    if (!answer) return "";
+
+    // Check if answer is an image path (contains /assets/)
+    if (typeof answer === 'string' && answer.includes('/assets/')) {
+        // Extract meaningful information from image path
+        // Example: /assets/grade2/rupee_500.jpg -> ₹500
+        if (answer.includes('rupee_')) {
+            const match = answer.match(/rupee_(\d+)/);
+            if (match) {
+                return `₹${match[1]}`;
+            }
+        }
+        // For other image types, return a generic label
+        const filename = answer.split('/').pop().replace(/\.(jpg|png|jpeg|gif)$/i, '');
+        return filename.replace(/_/g, ' ');
+    }
+
+    try {
+        // Only try to parse if it looks like a JSON object
+        if (typeof answer === 'string' && answer.trim().startsWith('{')) {
+            const parsed = JSON.parse(answer);
+            const values = Object.values(parsed);
+
+            // Check if values are complex objects
+            if (values.length > 0 && typeof values[0] === 'object') {
+                return values.map(v => {
+                    if (v.faces !== undefined && v.vertices !== undefined && v.edges !== undefined) {
+                        return `F: ${v.faces}, V: ${v.vertices}, E: ${v.edges}`;
+                    }
+                    if (v.num !== undefined && v.den !== undefined) {
+                        return `$\\frac{${v.num}}{${v.den}}$`;
+                    }
+                    // Special handling for linear equations with multiple solutions
+                    if (v.x !== undefined && v.y !== undefined && v._equation) {
+                        const { a, b, c } = v._equation;
+                        // Generate 3-4 sample solutions
+                        const solutions = [];
+
+                        // Solution 1: x = 0
+                        if (c % b === 0) {
+                            solutions.push(`(0, ${c / b})`);
+                        }
+
+                        // Solution 2: y = 0
+                        if (c % a === 0) {
+                            solutions.push(`(${c / a}, 0)`);
+                        }
+
+                        // Solution 3: Try x = 2
+                        const y_for_2 = (c - a * 2) / b;
+                        if (Number.isInteger(y_for_2)) {
+                            solutions.push(`(2, ${y_for_2})`);
+                        }
+
+                        // Solution 4: Try x = 1
+                        const y_for_1 = (c - a * 1) / b;
+                        if (Number.isInteger(y_for_1) && !solutions.includes(`(1, ${y_for_1})`)) {
+                            solutions.push(`(1, ${y_for_1})`);
+                        }
+
+                        // Return formatted string with "Possible answers include:"
+                        if (solutions.length > 0) {
+                            return `Possible answers: ${solutions.slice(0, 3).join(', ')}, etc.`;
+                        }
+                    }
+                    if (v.x !== undefined && v.y !== undefined) {
+                        return `(${v.x}, ${v.y})`;
+                    }
+                    // Handle True/False variant
+                    if (v.perimeter !== undefined && v.area !== undefined) {
+                        return `P: ${v.perimeter}, A: ${v.area}`;
+                    }
+                    if (v.value !== undefined) {
+                        return v.value;
+                    }
+                    return JSON.stringify(v);
+                }).join(' | ');
+            }
+
+            return values.join(', ');
+        }
+    } catch (e) {
+        // console.error("Error parsing answer JSON", e);
+    }
+    return answer;
+};
+
+// Helper function to render answer (as image or text)
+const renderAnswer = (answer) => {
+    if (!answer) return null;
+
+    // Check if answer is an image path
+    if (typeof answer === 'string' && answer.includes('/assets/')) {
+        return (
+            <img
+                src={answer}
+                alt={formatAnswer(answer)}
+                style={{
+                    maxWidth: '120px',
+                    maxHeight: '60px',
+                    objectFit: 'contain',
+                    borderRadius: '4px',
+                    border: '1px solid #e2e8f0'
+                }}
+            />
+        );
+    }
+
+    // Otherwise render as text with MathRenderer
+    return <MathRenderer content={formatAnswer(answer)} />;
+};
+
+const QuizResultClient = () => {
+
+    const [quizSession, setQuizSession] = useContext(QuizSessionContext);
+    const { user, userData, loading } = useAuth();
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const reportId = searchParams.get("reportId");
+
+    // Guard to prevent double-save in Strict Mode
+    const hasSavedRef = React.useRef(false);
+
+    const [reportState, setReportState] = useState(null);
+    const [loadingReport, setLoadingReport] = useState(true);
+    const [showCelebration, setShowCelebration] = useState(false);
+    const [floatingEmojis, setFloatingEmojis] = useState([]);
+    const [isAdminView, setIsAdminView] = useState(false);
+    const [studentInfo, setStudentInfo] = useState(null); // For teacher view
+
+    useEffect(() => {
+        const loadReport = async () => {
+            try {
+                const userGrade = quizSession?.userDetails?.activeChild?.grade || quizSession?.userDetails?.grade;
+                const phoneParam = searchParams.get("phone");
+                const adminView = searchParams.get("adminView");
+                const teacherView = searchParams.get("teacherView");
+                const studentUidParam = searchParams.get("studentUid");
+                const childIdParam = searchParams.get("childId");
+
+                let targetReport = null;
+
+                // Case 0: Admin View
+                if (phoneParam && adminView === 'true') {
+                    console.log('🔍 Admin View Detected - Loading report for phone:', phoneParam);
+                    const normalizedPhone = phoneParam.replace(/\D/g, '').slice(-10);
+                    // Fetch user reports via API using phone (uid param)
+                    // The API expects 'uid' which maps to firebase_uid. 
+                    // If migration used phone as firebase_uid for these users, this works.
+                    const response = await fetch(`/api/reports/?uid=${encodeURIComponent(normalizedPhone)}&childId=${childIdParam || ''}`);
+                    if (response.ok) {
+                        const res = await response.json();
+                        if (res.success && res.data && res.data.length > 0) {
+                            // Sort and find
+                            const reports = res.data.map(r => ({ ...JSON.parse(r.report_json), reportId: r.report_id, timestamp: r.created_at }));
+                            reports.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+
+                            if (reportId) {
+                                targetReport = reports.find(r => r.reportId == reportId || r.timestamp?.toString() === reportId);
+                                if (!targetReport && reports.length > 0) targetReport = reports[0]; // Fallback
+                            } else {
+                                targetReport = reports[0];
+                            }
+                        }
+                    }
+                }
+                // Case 1: Teacher/Specific Report View
+                else if (reportId && teacherView === 'true' && studentUidParam) {
+                    console.log('👨‍🏫 Teacher View - Loading student report:', { studentUidParam, childIdParam, reportId });
+
+                    // Fetch student info first (from teachers or users endpoint? API doesn't expose public user details easily except admin)
+                    // For now, we skip setting detailed studentInfo strictly from API unless we add an endpoint.
+                    // Or we assume reports API returns enough.
+
+                    // We can use the same Reports API with the student's UID
+                    const response = await fetch(`/api/reports/?uid=${encodeURIComponent(studentUidParam)}&childId=${childIdParam || ''}`);
+                    if (response.ok) {
+                        const res = await response.json();
+                        if (res.success && res.data && res.data.length > 0) {
+                            const reports = res.data.map(r => ({ ...JSON.parse(r.report_json), reportId: r.report_id, timestamp: r.created_at }));
+                            // Filter by reportId if specific one requested
+                            if (reportId !== 'root') {
+                                targetReport = reports.find(r => r.reportId == reportId || r.timestamp == reportId);
+                            } else {
+                                // 'root' usually implies latest or aggregation? 
+                                targetReport = reports[0];
+                            }
+                        }
+                    }
+                }
+                // Case 2: Immediate Quiz Results (Computed locally)
+                else if (quizSession?.questionPaper && userGrade && !reportId) {
+                    const computed = analyzeResponses(quizSession.questionPaper, userGrade);
+                    setReportState({
+                        summary: computed.summary,
+                        topicFeedback: computed.topicFeedback,
+                        perQuestionReport: computed.perQuestionReport,
+                        learningPlanSummary: computed.learningPlanSummary,
+                        learningPlan: computed.learningPlan,
+                    });
+                    return;
+                }
+                // Case 3: Standard User History/Latest Report
+                else if (user) {
+                    // Try fetch by Report ID specifically if present
+                    if (reportId) {
+                        const response = await fetch(`/api/reports/${reportId}`);
+                        if (response.ok) {
+                            const res = await response.json();
+                            if (res.success && res.data) {
+                                targetReport = { ...JSON.parse(res.data.report_json), reportId: res.data.report_id, timestamp: res.data.created_at };
+                            }
+                        }
+                    }
+                    // Else fetch latest for user
+                    else {
+                        const response = await fetch(`/api/reports/?uid=${encodeURIComponent(user.uid)}`); // Use auth UID
+                        if (response.ok) {
+                            const res = await response.json();
+                            if (res.success && res.data && res.data.length > 0) {
+                                const reports = res.data.map(r => ({ ...JSON.parse(r.report_json), reportId: r.report_id, timestamp: r.created_at }));
+                                reports.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+                                targetReport = reports[0];
+                            }
+                        }
+                    }
+                }
+
+                if (targetReport) {
+                    let topicFeedback = targetReport.topicFeedback;
+                    let perQuestionReport = targetReport.perQuestionReport;
+                    let learningPlanSummary = targetReport.learningPlanSummary;
+                    let learningPlan = targetReport.learningPlan;
+
+                    if (!topicFeedback && targetReport.generalFeedbackStringified) {
+                        try {
+                            const parsed = JSON.parse(targetReport.generalFeedbackStringified);
+                            topicFeedback = parsed.topicFeedback || {};
+                            perQuestionReport = parsed.perQuestionReport || [];
+                            learningPlanSummary = parsed.learningPlanSummary || "";
+                        } catch (e) {
+                            topicFeedback = {};
+                            perQuestionReport = [];
+                            learningPlanSummary = "";
+                        }
+                    }
+
+                    setReportState({
+                        summary: targetReport.summary,
+                        topicFeedback: topicFeedback || {},
+                        perQuestionReport: perQuestionReport || [],
+                        learningPlanSummary: learningPlanSummary || "",
+                        learningPlan: learningPlan || [],
+                    });
+                }
+            } catch (error) {
+                console.error('❌ Error loading report:', error);
+            } finally {
+                setLoadingReport(false);
+            }
+        };
+
+        loadReport();
+    }, [quizSession, user, userData, reportId]); // Added reportId to trigger refresh when viewing different reports
+
+    // Check for celebration (100% Score)
+    useEffect(() => {
+        if (reportState?.summary?.accuracyPercent === 100) {
+            // Only show celebration if not viewing an old report (optional, but requested behavior implies immediate feedback)
+            // But user might want to see it again? Let's show it.
+            // Actually, best to show only on *first* load or just trigger it.
+            // Let's trigger it with a small delay to ensure UI is ready
+            const timer = setTimeout(() => {
+                setShowCelebration(true);
+                // Trigger confetti/clap sound here if we had one
+                triggerFloatingEmojis();
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [reportState]);
+
+    // Detect if viewing from admin dashboard
+    useEffect(() => {
+        const adminView = searchParams.get('adminView');
+        setIsAdminView(adminView === 'true');
+    }, [searchParams]);
+
+    const triggerFloatingEmojis = () => {
+        const emojis = ['🎉', '👏', '🏆', '⭐', '🎊', '✨'];
+        const newEmojis = [];
+        for (let i = 0; i < 20; i++) {
+            newEmojis.push({
+                id: i,
+                char: emojis[Math.floor(Math.random() * emojis.length)],
+                left: Math.random() * 100 + '%',
+                delay: Math.random() * 2 + 's'
+            });
+        }
+        setFloatingEmojis(newEmojis);
+    };
+
+
+    const rawSummary = reportState?.summary || {
+        totalQuestions: 0,
+        attempted: 0,
+        correct: 0,
+        wrong: 0,
+        accuracyPercent: 0,
+        totalTime: 0,
+    };
+
+    // Ensure accuracy is based on totalQuestions (e.g., 30/30 -> 100%)
+    const summary = {
+        ...rawSummary,
+        accuracyPercent:
+            rawSummary.totalQuestions > 0
+                ? Math.round((rawSummary.correct / rawSummary.totalQuestions) * 100)
+                : 0,
+    };
+
+    const topicFeedback = reportState?.topicFeedback || {};
+    const perQuestionReport = reportState?.perQuestionReport || [];
+    const learningPlanSummary = reportState?.learningPlanSummary || "";
+    const notAttempted = summary.totalQuestions - summary.attempted;
+
+    // Modal states
+    const [topicModalOpen, setTopicModalOpen] = useState(false);
+    const [questionModalOpen, setQuestionModalOpen] = useState(false);
+    const [learningPlanModalOpen, setLearningPlanModalOpen] = useState(false);
+
+    // Filters for Question-wise Performance
+    const [filterCategory, setFilterCategory] = useState("All");
+    const [filterStatus, setFilterStatus] = useState("All");
+
+    // Compute unique topics and filtered questions
+    const allTopics = ["All", ...new Set(perQuestionReport.map(q => q.topic))];
+
+    // Calculate counts for status filter
+    const statusCounts = perQuestionReport.reduce((acc, q) => {
+        const score = q.score !== undefined ? q.score : (q.isCorrect ? 1 : 0);
+        const isCorrect = score === 1;
+        const isWrong = score === 0 && q.attempted;
+        const isSkipped = !q.attempted;
+
+        acc.All++;
+        if (isCorrect) acc.Correct++;
+        if (isWrong) acc.Wrong++;
+        if (isSkipped) acc.Skipped++;
+        return acc;
+    }, { All: 0, Correct: 0, Wrong: 0, Skipped: 0 });
+
+    const filteredQuestions = perQuestionReport.filter(q => {
+        // Filter by Category
+        if (filterCategory !== "All" && q.topic !== filterCategory) return false;
+
+        // Filter by Status
+        const score = q.score !== undefined ? q.score : (q.isCorrect ? 1 : 0);
+        const isCorrect = score === 1;
+        const isWrong = score === 0 && q.attempted;
+        const isSkipped = !q.attempted;
+
+        if (filterStatus === "Correct" && !isCorrect) return false;
+        if (filterStatus === "Wrong" && !isWrong) return false;
+        if (filterStatus === "Skipped" && !isSkipped) return false;
+
+        return true;
+    });
+
+    // Tutor booking dialog state
+    const [tutorDialogOpen, setTutorDialogOpen] = useState(false);
+    const [tutorSubmitting, setTutorSubmitting] = useState(false);
+    const [tutorSuccess, setTutorSuccess] = useState("");
+    const [tutorError, setTutorError] = useState("");
+    const [tutorForm, setTutorForm] = useState({
+        phone: "",
+    });
+
+    useEffect(() => {
+        if (!quizSession?.questionPaper || !Array.isArray(quizSession.questionPaper) || quizSession.questionPaper.length === 0) {
+            return;
+        }
+
+        // Don't save if we're viewing an existing report (reportId exists in URL)
+        // Only save when completing a new quiz (no reportId)
+        const currentReportId = searchParams?.get("reportId");
+        if (currentReportId) {
+            console.log("Skipping save: viewing existing report with ID", currentReportId);
+            return;
+        }
+
+
+        // Get user grade to compute the report
+        const userGrade = quizSession?.userDetails?.activeChild?.grade || quizSession?.userDetails?.grade;
+        if (!userGrade) return;
+
+        // Compute the report to validate it has actual data
+        const computed = analyzeResponses(quizSession.questionPaper, userGrade);
+        console.log("[QuizResultClient] Computed report summary:", computed.summary);
+
+        // Don't save if there's no actual quiz data
+        if (!computed.summary || computed.summary.totalQuestions === 0) {
+            console.log("[QuizResultClient] Skipping save: no valid quiz data (totalQuestions == 0)");
+            return;
+        }
+
+        // Get user key from user object (consistent with Dashboard) or quizSession
+        let userKey = user ? getUserDatabaseKey(user) : null;
+
+        if (!userKey) {
+            userKey = quizSession?.userDetails?.userKey || quizSession?.userDetails?.parentPhone || quizSession?.userDetails?.parentEmail || quizSession?.userDetails?.phoneNumber;
+        }
+        console.log("[QuizResultClient] Using userKey:", userKey);
+        // fallback to phoneNumber if parentPhone is missing (legacy single user) uses phoneNumber as key
+
+        const childId = quizSession?.userDetails?.activeChildId || quizSession?.userDetails?.childId || "default";
+
+        if (!userKey) return;
+
+        // Correct path: NMD_2025/Reports/{parentKey}/{childId}
+        // If it's a legacy user (no activeChildId), they might be stored at root or default? 
+        // Let's stick to the new structure: Reports/ParentKey/ChildKey
+        const finalParentKey = userKey.replace(/\./g, '_'); // sanitize email if needed, though phone is preferred
+        console.log("[QuizResultClient] Saving report to:", finalParentKey, childId);
+
+        // Check if we already saved this session
+        if (hasSavedRef.current) return;
+        hasSavedRef.current = true;
+
+        console.log("[QuizResultClient] Saving report to API:", finalParentKey, childId);
+
+        // Sanitize topicFeedback keys if needed, though Postgres JSONB handles special chars better than Firebase keys.
+        // Keeping strict sanitization for consistency.
+        const sanitizedTopicFeedback = {};
+        Object.entries(computed.topicFeedback).forEach(([topic, feedback]) => {
+            const sanitizedKey = topic.replace(/[.#$\/\[\]]/g, '_');
+            sanitizedTopicFeedback[sanitizedKey] = feedback;
+        });
+
+        const reportPayload = {
+            summary: computed.summary,
+            topicFeedback: sanitizedTopicFeedback,
+            perQuestionReport: computed.perQuestionReport,
+            learningPlanSummary: computed.learningPlanSummary,
+            learningPlan: computed.learningPlan,
+            timestamp: new Date().toISOString(),
+            type: quizSession.userDetails.testType || 'ASSESSMENT',
+        };
+
+        // Determine correct UID for API
+        // If userKey looks like a phone number, we might need the actual Firebase UID if the backend expects it.
+        // However, reports.py extracts user_id from users table using 'uid' param (which is firebase_uid).
+        // So we should pass the actual user.uid if available, or the phone number userKey if that's what we used for registration.
+        // Given current Auth flow, user.uid is the robust choice.
+        const uidToSend = user?.uid || userKey;
+
+        fetch('/api/reports', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                uid: uidToSend,
+                childId: childId,
+                reportData: reportPayload,
+                category: reportPayload.type
+            }),
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log("[QuizResultClient] Report saved successfully to DB via API.");
+                } else {
+                    console.error("[QuizResultClient] API returned error:", data);
+                    hasSavedRef.current = false; // Retry?
+                }
+            })
+            .catch(error => {
+                console.error("[QuizResultClient] Error saving report:", error);
+                hasSavedRef.current = false;
+            });
+    }, [quizSession?.questionPaper, searchParams]); // Check searchParams for reportId
+
+
+    const parseLearningPlan = (text) => {
+        const parts = text.split("Time Tip:");
+        const nextSteps = parts[0] ? parts[0].split("\n- ").filter(item => item.trim().length > 0) : [];
+        return {
+            intro: nextSteps[0]?.split("\n")[0] || "",
+            steps: nextSteps.map(s => s.replace(nextSteps[0]?.split("\n")[0], "").trim()).filter(s => s),
+            timeTips: parts[1] ? parts[1].split("\n- ").filter(item => item.trim().length > 0) : []
+        };
+    };
+
+    const learningPlan = parseLearningPlan(learningPlanSummary);
+
+    // Determine which student's identity to show in the header.
+    let displayName = quizSession?.userDetails?.activeChild?.name || quizSession?.userDetails?.name || "";
+    let displayGrade = quizSession?.userDetails?.activeChild?.grade || quizSession?.userDetails?.grade || "";
+    let displayPhone = quizSession?.userDetails?.phoneNumber || quizSession?.userDetails?.parentPhone || "";
+
+    if ((!displayName || !displayGrade) && user && userData?.children) {
+        // Get user key (works for phone, Google, and email auth)
+        const userKey = getUserDatabaseKey(user);
+        const children = userData.children;
+        const childKeys = Object.keys(children);
+        if (childKeys.length > 0) {
+            let activeChildId = childKeys[0];
+            if (childKeys.length > 1 && typeof window !== "undefined") {
+                const storedChildId = window.localStorage.getItem(`activeChild_${userKey}`);
+                if (storedChildId && childKeys.includes(storedChildId)) {
+                    activeChildId = storedChildId;
+                }
+            }
+            const activeChild = children[activeChildId];
+            if (activeChild) {
+                displayName = activeChild.name || displayName;
+                displayGrade = activeChild.grade || displayGrade;
+            }
+        }
+    }
+
+    // IMPORTANT: Validate phone number - if it's a UID (long hash) or empty, get from userData
+    // A valid phone number should be 10-15 digits, a UID is much longer with letters
+    const isValidPhone = displayPhone && /^\d{10,15}$/.test(displayPhone);
+
+    if (!isValidPhone) {
+        // displayPhone is empty, a UID, or invalid - get real phone from userData
+        if (userData?.phoneNumber) {
+            displayPhone = userData.phoneNumber;
+        } else if (userData?.parentPhone) {
+            displayPhone = userData.parentPhone;
+        } else if (user?.phoneNumber) {
+            displayPhone = user.phoneNumber.slice(-10);
+        } else {
+            displayPhone = "";
+        }
+    }
+
+    const handleOpenTutorDialog = () => {
+        setTutorSuccess("");
+        setTutorError("");
+
+        // IMPORTANT: Recalculate phone number from userData at dialog open time
+        // This ensures we have the latest userData loaded
+        let phoneNumber = "";
+
+        // First check if quizSession has a valid phone number
+        const sessionPhone = quizSession?.userDetails?.phoneNumber || quizSession?.userDetails?.parentPhone || "";
+        const isValidSessionPhone = sessionPhone && /^\d{10,15}$/.test(sessionPhone);
+
+        if (isValidSessionPhone) {
+            phoneNumber = sessionPhone;
+            console.log("📱 Using phone from quizSession:", phoneNumber);
+        } else if (userData?.phoneNumber) {
+            phoneNumber = userData.phoneNumber;
+            console.log("📱 Using phone from userData.phoneNumber:", phoneNumber);
+        } else if (userData?.parentPhone) {
+            phoneNumber = userData.parentPhone;
+            console.log("📱 Using phone from userData.parentPhone:", phoneNumber);
+        } else if (user?.phoneNumber) {
+            phoneNumber = user.phoneNumber.slice(-10);
+            console.log("📱 Using phone from user.phoneNumber:", phoneNumber);
+        } else {
+            console.log("⚠️ No phone number found. userData:", userData, "user:", user, "loading:", loading);
+        }
+
+        setTutorForm({
+            phone: phoneNumber,
+        });
+
+        setTutorDialogOpen(true);
+    };
+
+    const handleTutorFieldChange = (field) => (event) => {
+        const value = event.target.value;
+        setTutorForm((prev) => ({ ...prev, [field]: value }));
+    };
+
+    const handleDownloadLearningPlan = () => {
+        if (!reportState?.learningPlan || reportState.learningPlan.length === 0) {
+            return;
+        }
+
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.getWidth();
+
+        // Add white header background
+        doc.setFillColor(255, 255, 255);
+        doc.rect(0, 0, pageWidth, 45, 'F');
+
+        // Add purple accent border at bottom of header
+        doc.setFillColor(102, 126, 234);
+        doc.rect(0, 43, pageWidth, 2, 'F');
+
+        // Add logo
+        const logoImg = new Image();
+        logoImg.src = '/LearnersLogoTransparent.png';
+
+        try {
+            // Add logo on left side
+            doc.addImage(logoImg, 'PNG', 14, 8, 30, 30);
+        } catch (error) {
+            console.log('Logo not loaded, continuing without it');
+        }
+
+
+        // Add title text (shifted right to accommodate logo)
+        doc.setTextColor(102, 126, 234);
+        doc.setFontSize(22);
+        doc.setFont(undefined, 'bold');
+
+        // Capitalize name
+        const rawName = displayName || 'Student';
+        const capitalizedName = rawName.replace(/\b\w/g, c => c.toUpperCase());
+
+        // Full title string
+        const fullTitle = `${capitalizedName}'s Personalized Learning Plan`;
+
+        // Text wrapping settings
+        const textStartX = 50; // Logo ends at 44 (14+30), so 50 gives padding
+        const maxTextWidth = pageWidth - textStartX - 14; // Right margin 14
+        const splitTitle = doc.splitTextToSize(fullTitle, maxTextWidth);
+
+        // Render Title
+        let currentY = 20;
+        doc.text(splitTitle, textStartX, currentY);
+
+        // Adjust Y for subtitle based on title height
+        // splitTitle is an array of strings. Each line adds to height.
+        // Approx 10mm per line for size 22
+        currentY += (splitTitle.length * 9);
+
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor(100, 116, 139);
+        doc.text('Math Skill Builder', textStartX, currentY, { align: 'left' });
+
+        // Student details
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(11);
+        let yPos = 55;
+
+        doc.setFont(undefined, 'bold');
+        doc.text('Student Details:', 14, yPos);
+        yPos += 7;
+
+        doc.setFont(undefined, 'normal');
+        const pdfStudentName = quizSession?.userDetails?.name || userData?.children?.[quizSession?.userDetails?.activeChildId]?.name || userData?.name || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Student');
+        const pdfStudentGrade = quizSession?.userDetails?.grade || userData?.children?.[quizSession?.userDetails?.activeChildId]?.grade || userData?.grade || 'Grade';
+        doc.text(`Name: ${pdfStudentName}`, 14, yPos);
+        yPos += 6;
+        doc.text(`${pdfStudentGrade}`, 14, yPos);
+        yPos += 6;
+        doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, yPos);
+        yPos += 12;
+
+        // Learning plan table
+        const tableData = reportState.learningPlan.map((item) => [
+            `Day ${item.day}`,
+            item.skillCategory,
+            item.learnWithTutor,
+            item.selfLearn
+        ]);
+
+        autoTable(doc, {
+            startY: yPos,
+            head: [['Day', 'Skill Category', 'Learn with Tutor', 'Self Learn']],
+            body: tableData,
+            theme: 'grid',
+            headStyles: {
+                fillColor: [102, 126, 234],
+                textColor: [255, 255, 255],
+                fontStyle: 'bold',
+                fontSize: 10
+            },
+            bodyStyles: {
+                fontSize: 9,
+                cellPadding: 4
+            },
+            columnStyles: {
+                0: { cellWidth: 25 },
+                1: { cellWidth: 40 },
+                2: { cellWidth: 60 },
+                3: { cellWidth: 60 }
+            },
+            alternateRowStyles: {
+                fillColor: [248, 250, 252]
+            },
+            margin: { left: 14, right: 14 }
+        });
+
+        // Footer
+        const finalY = doc.lastAutoTable.finalY || yPos + 50;
+        doc.setFontSize(9);
+        doc.setTextColor(100, 116, 139);
+        doc.text('Keep practicing daily to master these skills! 🎯', pageWidth / 2, finalY + 15, { align: 'center' });
+
+        // Add website URL
+        doc.setFontSize(10);
+        doc.setTextColor(102, 126, 234);
+        doc.textWithLink('Visit: https://math100.learnersdigital.com/', pageWidth / 2, finalY + 23, {
+            align: 'center',
+            url: 'https://math100.learnersdigital.com/'
+        });
+
+        // Save PDF
+        const fileName = `Learning_Plan_${displayName || 'Student'}_${displayGrade || 'Grade'}.pdf`;
+        doc.save(fileName);
+    };
+
+
+    const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+    const [statusLoading, setStatusLoading] = useState(false);
+    const [latestBooking, setLatestBooking] = useState(null);
+
+    const [tutorSuccessDialogOpen, setTutorSuccessDialogOpen] = useState(false);
+
+    const handleSubmitTutorBooking = async (event) => {
+        event.preventDefault();
+        setTutorSuccess("");
+        setTutorError("");
+
+        if (!tutorForm.phone || tutorForm.phone.trim().length < 10) {
+            setTutorError("Please enter a valid phone number.");
+            return;
+        }
+
+        try {
+            setTutorSubmitting(true);
+
+            // Get user key (works for phone, Google, and email auth)
+            let userKey = "";
+            if (quizSession?.userDetails?.phoneNumber) {
+                userKey = quizSession.userDetails.phoneNumber;
+            } else if (user?.phoneNumber) {
+                userKey = user.phoneNumber.slice(-10);
+            } else if (user?.uid) {
+                userKey = user.uid;
+            }
+
+            let childId = quizSession?.userDetails?.childId || quizSession?.userDetails?.activeChildId || "default";
+            if (!quizSession?.userDetails?.childId && userData?.children) {
+                const children = userData.children;
+                const childKeys = Object.keys(children);
+                if (childKeys.length > 0) {
+                    let activeChildId = childKeys[0];
+                    if (childKeys.length > 1 && typeof window !== "undefined") {
+                        const storedChildId = window.localStorage.getItem(`activeChild_${userKey}`);
+                        if (storedChildId && childKeys.includes(storedChildId)) {
+                            activeChildId = storedChildId;
+                        }
+                    }
+                    childId = activeChildId;
+                }
+            }
+
+            const bookingId = `${childId}_${Date.now()}`;
+            // Firebase save removed
+            // const bookingRef = ref(firebaseDatabase, `NMD_2025/TutorBookings/${userKey}/${bookingId}`);
+
+            // Auto-populate all fields from session data
+            const bookingPayload = {
+                parentName: displayName || "",
+                studentName: displayName || "",
+                grade: displayGrade || "",
+                phone: tutorForm.phone,
+                preferredDate: "", // Will be scheduled by counselor
+                preferredTimeSlot: "", // Will be scheduled by counselor
+                mode: "To be decided", // Will be decided by counselor
+                notes: "",
+                reportSummary: summary,
+                createdAt: new Date().toISOString(),
+            };
+
+            // await set(bookingRef, bookingPayload);
+
+            // Also send to Google Apps Script webhook (for Sheets + email) in the background.
+            // This is fire-and-forget so any network issue does not affect the user flow.
+            const webhookUrl = import.meta.env.VITE_TUTOR_BOOKING_WEBHOOK;
+            if (webhookUrl) {
+                fetch(webhookUrl, {
+                    method: "POST",
+                    headers: {
+                        // Use text/plain to avoid CORS preflight; Apps Script will still
+                        // receive the raw JSON string in e.postData.contents.
+                        "Content-Type": "text/plain;charset=utf-8",
+                    },
+                    body: JSON.stringify({
+                        parentName: bookingPayload.parentName,
+                        studentName: bookingPayload.studentName,
+                        grade: bookingPayload.grade,
+                        phone: bookingPayload.phone,
+                        preferredDate: bookingPayload.preferredDate,
+                        preferredTimeSlot: bookingPayload.preferredTimeSlot,
+                        mode: bookingPayload.mode,
+                        notes: bookingPayload.notes,
+                    }),
+                }).catch((err) => {
+                    console.error("Error sending booking to Google Sheets webhook:", err);
+                });
+            }
+
+            setTutorSuccess("Request submitted. Our academic counselor will contact you shortly.");
+
+            // Close the booking modal first
+            setTutorDialogOpen(false);
+
+            // Then show the success celebration after a brief delay
+            setTimeout(() => {
+                setTutorSuccessDialogOpen(true);
+            }, 300);
+        } catch (error) {
+            console.error("Error saving tutor booking:", error);
+            setTutorError("Something went wrong while submitting your request. Please try again.");
+        } finally {
+            setTutorSubmitting(false);
+        }
+    };
+
+    const handleOpenStatusDialog = async () => {
+        setStatusLoading(true);
+        setLatestBooking(null);
+        setStatusDialogOpen(true);
+
+        try {
+            // Get user key (works for phone, Google, and email auth)
+            let userKey = "";
+            if (quizSession?.userDetails?.phoneNumber) {
+                userKey = quizSession.userDetails.phoneNumber;
+            } else if (user?.phoneNumber) {
+                userKey = user.phoneNumber.slice(-10);
+            } else if (user?.uid) {
+                userKey = user.uid;
+            }
+
+            if (!userKey) {
+                setStatusLoading(false);
+                return;
+            }
+
+            // Firebase fetch removed
+            // const bookingsRef = ref(firebaseDatabase, `NMD_2025/TutorBookings/${userKey}`);
+            // const snapshot = await get(bookingsRef);
+            // if (!snapshot.exists()) {
+            //     setStatusLoading(false);
+            //     return;
+            // }
+
+            // const data = snapshot.val() || {};
+            // const entries = Object.entries(data);
+            // if (entries.length === 0) {
+            //     setStatusLoading(false);
+            //     return;
+            // }
+
+            // const sorted = entries
+            //     .map(([id, value]) => ({ id, ...value }))
+            //     .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+            const sorted = [];
+
+            setLatestBooking(sorted[0]);
+        } catch (error) {
+            console.error("Error loading tutor booking status:", error);
+        } finally {
+            setStatusLoading(false);
+        }
+    };
+
+    // PDF Download Function
+    const handleDownloadPDF = () => {
+        if (!reportState?.learningPlan || reportState.learningPlan.length === 0) {
+            alert("No learning plan available to download");
+            return;
+        }
+
+        const doc = new jsPDF();
+
+        // Add header
+        doc.setFontSize(20);
+        doc.setTextColor(102, 126, 234); // Purple color
+        doc.text("Personalized Learning Plan", 105, 20, { align: 'center' });
+
+        // Add student info
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        const planStudentName = quizSession?.userDetails?.name || userData?.children?.[quizSession?.userDetails?.activeChildId]?.name || userData?.name || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Student');
+        const planStudentGrade = quizSession?.userDetails?.grade || userData?.children?.[quizSession?.userDetails?.activeChildId]?.grade || userData?.grade || 'Grade';
+        doc.text(`Student: ${planStudentName}`, 20, 35);
+        doc.text(`Grade: ${planStudentGrade}`, 20, 42);
+        doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, 49);
+        doc.text(`Powered by Learners Digital Tech`, 20, 56);
+
+        // Add table
+        doc.autoTable({
+            startY: 65,
+            head: [['Sl.No', 'Day', 'Skill Category', 'Learn with Tutor', 'Self Learn']],
+            body: tableData,
+            theme: 'grid',
+            headStyles: {
+                fillColor: [102, 126, 234],
+                textColor: [255, 255, 255],
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            styles: {
+                fontSize: 9,
+                cellPadding: 5,
+                overflow: 'linebreak',
+                halign: 'left'
+            },
+            columnStyles: {
+                0: { cellWidth: 15, halign: 'center' },
+                1: { cellWidth: 20, halign: 'center' },
+                2: { cellWidth: 35 },
+                3: { cellWidth: 60 },
+                4: { cellWidth: 60 }
+            }
+        });
+
+        // Save PDF
+        const fileStudentName = quizSession?.userDetails?.name || userData?.children?.[quizSession?.userDetails?.activeChildId]?.name || userData?.name || 'Student';
+        const fileName = `Learning_Plan_${fileStudentName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+        doc.save(fileName);
+    };
+
+    if (loadingReport && !reportState) {
+        return (
+            <div className={Styles.quizResultContainer}>
+                <Header />
+                <div className={Styles.loadingWrapper}>
+                    <CircularProgress />
+                    <span>Loading report...</span>
+                </div>
+                <Footer />
+            </div>
+        );
+    }
+
+    return (
+        <div className={Styles.quizResultContainer}>
+            <Header />
+
+            <div className={Styles.quizResultContent}>
+
+                {/* Admin Back Button */}
+                {isAdminView && (
+                    <div style={{
+                        maxWidth: '1200px',
+                        margin: '0 auto',
+                        padding: '1rem 1.5rem',
+                        marginBottom: '1rem'
+                    }}>
+                        <Button
+                            variant="outlined"
+                            startIcon={<ArrowLeft size={18} />}
+                            onClick={() => window.location.href = '/admin-dashboard'}
+                            sx={{
+                                borderRadius: 2,
+                                borderWidth: 2,
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                '&:hover': { borderWidth: 2 }
+                            }}
+                        >
+                            Back to Admin Dashboard
+                        </Button>
+                    </div>
+                )}
+
+                {/* Hero Section */}
+                <header className={Styles.heroSection}>
+                    <div className={Styles.heroContent}>
+                        <div className={Styles.userInfo}>
+                            <span className={Styles.userName}>
+                                {studentInfo?.name || quizSession?.userDetails?.name || userData?.children?.[quizSession?.userDetails?.activeChildId]?.name || userData?.name || user?.displayName || (user?.email ? user.email.split('@')[0] : 'Student')}
+                            </span>
+                            <span className={Styles.divider}>•</span>
+                            <span>
+                                {studentInfo?.grade || quizSession?.userDetails?.grade || userData?.children?.[quizSession?.userDetails?.activeChildId]?.grade || userData?.grade || 'Grade'}
+                            </span>
+                        </div>
+                        <h1 className={Styles.mainTitle}>Quiz Results</h1>
+                        <p className={Styles.subtitle}>Math Skill Report - Powered by Learners</p>
+                    </div>
+
+                    <div className={Styles.heroStats}>
+                        <div className={Styles.heroStatItem}>
+                            <span className={`${Styles.heroStatValue} ${Styles.statColorCorrect}`}>{Number(summary.correct).toFixed(2)}</span>
+                            <span className={Styles.heroStatLabel}>Correct</span>
+                        </div>
+                        <div className={Styles.heroStatItem}>
+                            <span className={`${Styles.heroStatValue} ${Styles.statColorWrong}`}>{Number(summary.wrong).toFixed(2)}</span>
+                            <span className={Styles.heroStatLabel}>Wrong</span>
+                        </div>
+                        <div className={Styles.heroStatItem}>
+                            <span className={Styles.heroStatValue} style={{ color: '#000' }}>
+                                {(() => {
+                                    const seconds = summary.totalTime || 0;
+                                    const m = Math.floor(seconds / 60);
+                                    const s = seconds % 60;
+                                    return `${m}:${s.toString().padStart(2, '0')}`;
+                                })()}
+                            </span>
+                            <span className={Styles.heroStatLabel}>Total Time</span>
+                        </div>
+                        <div className={Styles.heroStatItem}>
+                            <span className={`${Styles.heroStatValue} ${Styles.statColorSkipped}`}>{notAttempted}</span>
+                            <span className={Styles.heroStatLabel}>Skipped</span>
+                        </div>
+                        <div className={Styles.heroStatItem}>
+                            <span className={Styles.heroStatValue}>{summary.totalQuestions}</span>
+                            <span className={Styles.heroStatLabel}>Total</span>
+                        </div>
+                        <HeroChart summary={summary} notAttempted={notAttempted} />
+                    </div>
+
+                    <div className={Styles.scoreCard}>
+                        <div className={Styles.scoreCircle}>
+                            <svg viewBox="0 0 120 120" className={Styles.progressRing}>
+                                <circle cx="60" cy="60" r="54" className={Styles.progressRingBg} />
+                                <circle
+                                    cx="60"
+                                    cy="60"
+                                    r="54"
+                                    className={Styles.progressRingFill}
+                                    style={{
+                                        strokeDasharray: `${(summary.accuracyPercent / 100) * 339.292} 339.292`
+                                    }}
+                                />
+                            </svg >
+                            <div className={Styles.scoreText}>
+                                <div className={Styles.scorePercent}>{summary.accuracyPercent}%</div>
+                                <div className={Styles.scoreLabel}>Accuracy</div>
+                            </div>
+                        </div >
+
+                    </div >
+                </header >
+
+                {/* Stats Grid */}
+                {/* Stats Section Removed (Moved to Hero) */}
+
+                {/* Action Buttons */}
+                <section className={Styles.actionSection}>
+                    <Dialog
+                        open={showCelebration}
+                        onClose={() => setShowCelebration(false)}
+                        maxWidth="sm"
+                        fullWidth
+                        PaperProps={{
+                            className: Styles.modal
+                        }}
+                    >
+                        <div className={Styles.celebrationModal}>
+                            {floatingEmojis.map(emoji => (
+                                <div
+                                    key={emoji.id}
+                                    className={Styles.celebrationEmoji}
+                                    style={{ left: emoji.left, animationDelay: emoji.delay }}
+                                >
+                                    {emoji.char}
+                                </div>
+                            ))}
+                            <div className={Styles.celebrationIcon}>🏆</div>
+                            <h2 className={Styles.celebrationTitle}>100% Club!</h2>
+                            <p className={Styles.celebrationText}>
+                                Congratulations on getting a perfect score!<br />
+                                You've learned this topic perfectly.<br /><br />
+                                <strong>High Performers like you get special attention!</strong><br />
+                                Our academic tutor will contact you soon for advanced coaching.
+                            </p>
+                            <Button
+                                variant="contained"
+                                onClick={() => setShowCelebration(false)}
+                                style={{
+                                    background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)',
+                                    color: 'white',
+                                    fontWeight: 'bold',
+                                    padding: '10px 30px',
+                                    borderRadius: '50px',
+                                    boxShadow: '0 4px 15px rgba(255, 165, 0, 0.4)'
+                                }}
+                            >
+                                Awesome! 🎉
+                            </Button>
+                        </div>
+                    </Dialog>
+                    <Button
+                        className={Styles.actionButton}
+                        onClick={() => setTopicModalOpen(true)}
+                        startIcon={<BarChart3 />}
+                    >
+                        <div className={Styles.buttonContent}>
+                            <span className={Styles.buttonTitle}>Topic Feedback</span>
+                            <span className={Styles.buttonDesc}>View performance by topic</span>
+                        </div>
+                    </Button>
+                    <Button
+                        className={Styles.actionButton}
+                        onClick={() => setQuestionModalOpen(true)}
+                        startIcon={<FileText />}
+                    >
+                        <div className={Styles.buttonContent}>
+                            <span className={Styles.buttonTitle}>Question-wise Performance</span>
+                            <span className={Styles.buttonDesc}>Detailed question analysis</span>
+                        </div>
+                    </Button>
+                    <Button
+                        className={`${Styles.actionButton} ${Styles.tutorActionButton}`}
+                        onClick={handleOpenTutorDialog}
+                        startIcon={<BookOpen />}
+                    >
+                        <div className={Styles.buttonContent}>
+                            <span className={Styles.buttonTitle}>Learn with Tutor</span>
+                            <span className={Styles.buttonDesc}>Book a 1:1 slot with our math tutor</span>
+                        </div>
+                    </Button>
+                </section>
+
+                {/* Learning Plan */}
+                <section className={Styles.learningSection}>
+                    <div className={Styles.sectionHeaderWrapper}>
+                        <div className={Styles.sectionTitleRow}>
+                            <BookOpen className={Styles.sectionIcon} />
+                            <h2 className={Styles.sectionTitle}>Your Personalized Learning Plan</h2>
+                        </div>
+                        {reportState?.learningPlan && reportState.learningPlan.length > 0 && (
+                            <div className={Styles.sectionActions}>
+                                <button
+                                    className={Styles.downloadButton}
+                                    onClick={handleDownloadLearningPlan}
+                                    title="Download as PDF"
+                                >
+                                    <Download size={18} />
+                                    <span>Download PDF</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {reportState?.learningPlan && reportState.learningPlan.length > 0 ? (
+                        <>
+                            {/* Mobile/Tablet: Show button to open modal */}
+                            <div className={Styles.mobileViewPlanButton}>
+                                <Button
+                                    variant="contained"
+                                    onClick={() => setLearningPlanModalOpen(true)}
+                                    startIcon={<BookOpen />}
+                                    fullWidth
+                                    className={Styles.viewPlanButton}
+                                >
+                                    View Learning Plan
+                                </Button>
+                            </div>
+
+                            {/* Desktop: Show table directly */}
+                            <div className={Styles.desktopTableContainer}>
+                                <div className={Styles.tableContainer}>
+                                    <table className={Styles.learningTable}>
+                                        <thead>
+                                            <tr>
+                                                <th>Sl.No</th>
+                                                <th>Day</th>
+                                                <th>Skill Category</th>
+                                                <th>Learn with Tutor</th>
+                                                <th>Self Learn</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {reportState.learningPlan.map((item, index) => (
+                                                <tr key={index}>
+                                                    <td>{index + 1}</td>
+                                                    <td>Day {item.day}</td>
+                                                    <td>{item.skillCategory}</td>
+                                                    <td>{item.learnWithTutor}</td>
+                                                    <td>{item.selfLearn}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <div className={Styles.learningCard}>
+                            {summary.accuracyPercent === 100 ? (
+                                <p className={Styles.learningIntro}>
+                                    🎉 Excellent work! You didn't make any mistakes. Keep practicing to maintain your skills!
+                                </p>
+                            ) : (
+                                <p className={Styles.learningIntro}>
+                                    Keep practicing! Complete more questions to generate a personalized learning plan.
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    <div className={Styles.tutorStatusInline}>
+                        <span className={Styles.tutorHelper}>Already requested a tutor?</span>
+                        <MuiLink
+                            component="button"
+                            type="button"
+                            className={Styles.tutorStatusLink}
+                            onClick={handleOpenStatusDialog}
+                        >
+                            View booking status
+                        </MuiLink>
+                    </div>
+                </section>
+            </div>
+
+            {/* Learning Plan Modal (Mobile/Tablet) */}
+            <Dialog
+                open={learningPlanModalOpen}
+                onClose={() => setLearningPlanModalOpen(false)}
+                maxWidth="md"
+                fullWidth
+                PaperProps={{
+                    className: Styles.modal
+                }}
+            >
+                <DialogTitle className={Styles.modalHeader}>
+                    <div className={Styles.modalTitleWrapper}>
+                        <BookOpen className={Styles.modalIcon} />
+                        <span>Your Personalized Learning Plan</span>
+                    </div>
+                    <IconButton onClick={() => setLearningPlanModalOpen(false)} className={Styles.closeButton}>
+                        <X size={20} />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent className={Styles.modalContent}>
+                    <div className={Styles.learningPlanCards}>
+                        {reportState?.learningPlan?.map((item, index) => (
+                            <div key={index} className={Styles.learningPlanCard}>
+                                <div className={Styles.cardHeader}>
+                                    <span className={Styles.cardNumber}>{index + 1}</span>
+                                    <span className={Styles.cardDay}>Day {item.day}</span>
+                                </div>
+                                <div className={Styles.cardSkill}>
+                                    <strong>Skill Category:</strong>
+                                    <p>{item.skillCategory}</p>
+                                </div>
+                                <div className={Styles.cardSection}>
+                                    <div className={Styles.sectionLabel}>
+                                        <BookOpen size={16} />
+                                        <strong>Learn with Tutor</strong>
+                                    </div>
+                                    <p>{item.learnWithTutor}</p>
+                                </div>
+                                <div className={Styles.cardSection}>
+                                    <div className={Styles.sectionLabel}>
+                                        <Target size={16} />
+                                        <strong>Self Learn</strong>
+                                    </div>
+                                    <p>{item.selfLearn}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Topic Feedback Modal */}
+            <Dialog
+                open={topicModalOpen}
+                onClose={() => setTopicModalOpen(false)}
+                maxWidth="md"
+                fullWidth
+                PaperProps={{
+                    className: Styles.modal
+                }}
+            >
+                <DialogTitle className={Styles.modalHeader}>
+                    <div className={Styles.modalTitleWrapper}>
+                        <BarChart3 className={Styles.modalIcon} />
+                        <span>Topic Feedback</span>
+                    </div>
+                    <IconButton onClick={() => setTopicModalOpen(false)} className={Styles.closeButton}>
+                        <X size={20} />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent className={Styles.modalContent}>
+                    {Object.entries(topicFeedback).map(([topic, data]) => (
+                        <div key={topic} className={Styles.topicCard}>
+                            <div className={Styles.topicHeader}>
+                                <h3 className={Styles.topicName}>{topic}</h3>
+                                <div className={Styles.topicStats}>
+                                    <span className={Styles.correctBadge}>✓ {data.correctCount}</span>
+                                    <span className={Styles.wrongBadge}>✗ {data.wrongCount}</span>
+                                </div>
+                            </div>
+                            <div className={Styles.progressBar}>
+                                <div
+                                    className={Styles.progressFill}
+                                    style={{ width: `${(data.correctCount / (data.correctCount + data.wrongCount)) * 100}%` }}
+                                />
+                            </div>
+                            <div className={Styles.feedbackGrid}>
+                                <div className={Styles.feedbackItem}>
+                                    <div className={Styles.feedbackHeader}>
+                                        <TrendingUp size={16} />
+                                        <span>What you're doing well</span>
+                                    </div>
+                                    <p>{data.positiveFeedback}</p>
+                                </div>
+                                <div className={Styles.feedbackItem}>
+                                    <div className={Styles.feedbackHeader}>
+                                        <Target size={16} />
+                                        <span>What you can improve</span>
+                                    </div>
+                                    <p>{(data.correctCount + data.wrongCount) === 0 ? "Start practicing questions in this topic to identify areas for improvement." : data.improvementFeedback}</p>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </DialogContent>
+            </Dialog >
+
+            {/* Cheerful Success Celebration */}
+            {tutorSuccessDialogOpen && (
+                <div
+                    className={Styles.successCelebration}
+                    onClick={() => setTutorSuccessDialogOpen(false)}
+                >
+                    <div className={Styles.successIcon}>
+                        <CheckCircle size={60} strokeWidth={3} />
+                    </div>
+                    <div className={Styles.successMessage}>
+                        <h2 className={Styles.successTitle}>🎉 Request Submitted!</h2>
+                        <p className={Styles.successText}>
+                            Our academic counselor will contact you shortly on WhatsApp/SMS to schedule your personalized learning session.
+                        </p>
+                    </div>
+                    {/* Confetti elements */}
+                    {[...Array(30)].map((_, i) => (
+                        <div
+                            key={i}
+                            className={Styles.confetti}
+                            style={{
+                                left: `${Math.random() * 100}%`,
+                                top: `${Math.random() * 20}%`,
+                                background: ['#667eea', '#764ba2', '#10b981', '#f59e0b', '#ef4444'][Math.floor(Math.random() * 5)],
+                                animationDelay: `${Math.random() * 0.5}s`,
+                                animationDuration: `${2 + Math.random() * 2}s`
+                            }}
+                        />
+                    ))}
+                </div>
+            )}
+
+            {/* Tutor Booking Status Modal */}
+            < Dialog
+                open={statusDialogOpen}
+                onClose={() => setStatusDialogOpen(false)}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    className: Styles.modal,
+                }}
+            >
+                <DialogTitle className={Styles.modalHeader}>
+                    <div className={Styles.modalTitleWrapper}>
+                        <BookOpen className={Styles.modalIcon} />
+                        <span>Your Tutor Booking</span>
+                    </div>
+                    <IconButton onClick={() => setStatusDialogOpen(false)} className={Styles.closeButton}>
+                        <X size={20} />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent className={Styles.modalContent}>
+                    {statusLoading && (
+                        <div className={Styles.loadingWrapper}>
+                            <CircularProgress size={20} />
+                            <span>Loading your latest booking...</span>
+                        </div>
+                    )}
+                    {!statusLoading && !latestBooking && (
+                        <p className={Styles.tutorHelper}>No tutor booking found yet for this number.</p>
+                    )}
+                    {!statusLoading && latestBooking && (
+                        <div className={Styles.tutorStatusCard}>
+                            <h3 className={Styles.sectionTitle}>Latest request</h3>
+                            <p className={Styles.tutorStatusLine}><strong>Student:</strong> {latestBooking.studentName} (Grade {latestBooking.grade})</p>
+                            <p className={Styles.tutorStatusLine}><strong>Preferred date:</strong> {latestBooking.preferredDate}</p>
+                            <p className={Styles.tutorStatusLine}><strong>Time slot:</strong> {latestBooking.preferredTimeSlot}</p>
+                            <p className={Styles.tutorStatusLine}><strong>Mode:</strong> {latestBooking.mode}</p>
+                            <p className={Styles.tutorStatusLine}><strong>Contact:</strong> {latestBooking.phone}</p>
+                            <p className={Styles.tutorStatusNote}>Our academic counselor will reach out on this number to confirm your exact slot.</p>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog >
+
+            {/* Tutor Booking Modal */}
+            < Dialog
+                open={tutorDialogOpen}
+                onClose={() => !tutorSubmitting && setTutorDialogOpen(false)}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    className: Styles.modal,
+                }}
+            >
+                <DialogTitle className={Styles.modalHeader}>
+                    <div className={Styles.modalTitleWrapper}>
+                        <BookOpen className={Styles.modalIcon} />
+                        <span>Book a Learning Session</span>
+                    </div>
+                    <IconButton
+                        onClick={() => !tutorSubmitting && setTutorDialogOpen(false)}
+                        className={Styles.closeButton}
+                        disabled={tutorSubmitting}
+                    >
+                        <X size={20} />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent className={Styles.modalContent}>
+                    <form className={Styles.tutorForm} onSubmit={handleSubmitTutorBooking}>
+                        {/* Display user info as read-only */}
+                        <div className={Styles.userInfoDisplay}>
+                            <div className={Styles.infoItem}>
+                                <span className={Styles.infoLabel}>Student:</span>
+                                <span className={Styles.infoValue}>{displayName || "Not available"}</span>
+                            </div>
+                            <div className={Styles.infoItem}>
+                                <span className={Styles.infoLabel}>Grade:</span>
+                                <span className={Styles.infoValue}>{displayGrade || "Not available"}</span>
+                            </div>
+                        </div>
+
+                        {/* Phone verification field */}
+                        <div className={Styles.phoneVerification}>
+                            <TextField
+                                label="Please Enter Your Phone Number"
+                                value={tutorForm.phone}
+                                onChange={handleTutorFieldChange("phone")}
+                                fullWidth
+                                size="medium"
+                                type="tel"
+                                inputProps={{
+                                    maxLength: 10,
+                                    inputMode: 'numeric',
+                                    pattern: '[0-9]*'
+                                }}
+                                placeholder="Enter your 10-digit phone number"
+                                required
+                            />
+                        </div>
+
+                        {tutorError && (
+                            <div className={Styles.tutorError}>{tutorError}</div>
+                        )}
+
+                        <div className={Styles.tutorSubmitRow}>
+                            <span className={Styles.tutorHelper}>Our academic counselor will contact you on WhatsApp/SMS to schedule your session.</span>
+                            <Button
+                                type="submit"
+                                variant="contained"
+                                disabled={tutorSubmitting}
+                                className={Styles.submitButton}
+                                startIcon={tutorSubmitting ? <CircularProgress size={20} color="inherit" /> : <CheckCircle size={20} />}
+                            >
+                                {tutorSubmitting ? "Booking..." : "Book My Tutor!"}
+                            </Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog >
+
+            {/* Question-wise Performance Modal */}
+            < Dialog
+                open={questionModalOpen}
+                onClose={() => setQuestionModalOpen(false)}
+                maxWidth="lg"
+                fullWidth
+                PaperProps={{
+                    className: Styles.modal
+                }}
+            >
+                <DialogTitle className={Styles.modalHeader}>
+                    <div className={Styles.modalTitleWrapper}>
+                        <FileText className={Styles.modalIcon} />
+                        <span>Question-wise Performance</span>
+                    </div>
+                    <IconButton onClick={() => setQuestionModalOpen(false)} className={Styles.closeButton}>
+                        <X size={20} />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent className={Styles.modalContent}>
+                    {/* Professional Filter Bar */}
+                    {/* Professional Filter Bar */}
+                    <div className={Styles.filterContainer}>
+                        {/* Status Filter Logic (Chips) */}
+                        <div className={Styles.filterChipsRow}>
+                            <span className={Styles.filterLabel}>Show:</span>
+                            {[
+                                { id: 'All', label: 'All', icon: null, color: '#64748b', bg: '#f1f5f9' },
+                                { id: 'Correct', label: 'Correct', icon: <CheckCircle size={14} />, color: '#16a34a', bg: '#dcfce7' },
+                                { id: 'Wrong', label: 'Wrong', icon: <XCircle size={14} />, color: '#dc2626', bg: '#fee2e2' },
+                                { id: 'Skipped', label: 'Skipped', icon: <HelpCircle size={14} />, color: '#d97706', bg: '#fef3c7' }
+                            ].map(status => {
+                                const isActive = filterStatus === status.id;
+                                return (
+                                    <button
+                                        key={status.id}
+                                        onClick={() => setFilterStatus(status.id)}
+                                        className={`${Styles.filterChip} ${isActive ? Styles.filterChipActive : ''}`}
+                                        style={{
+                                            color: isActive ? status.color : '#475569',
+                                            backgroundColor: isActive ? 'white' : status.bg, // Keep bg color overrides for inactive state if needed, or move to css
+                                            borderColor: isActive ? status.color : 'transparent'
+                                        }}
+                                    >
+                                        {status.icon}
+                                        <span>{status.label}</span>
+                                        <span className={Styles.filterChipCount} style={{
+                                            backgroundColor: isActive ? status.color : 'rgba(0,0,0,0.1)',
+                                            color: isActive ? 'white' : '#475569',
+                                        }}>
+                                            {statusCounts[status.id]}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* Divider */}
+                        <div className={Styles.filterDivider}></div>
+
+                        {/* Category Filter */}
+                        <div className={Styles.filterCategoryRow}>
+                            <span className={Styles.filterLabel}>Filter by Topic:</span>
+                            <div className={Styles.categorySelectWrapper}>
+                                <select
+                                    value={filterCategory}
+                                    onChange={(e) => setFilterCategory(e.target.value)}
+                                    className={Styles.categorySelect}
+                                >
+                                    {allTopics.map(topic => (
+                                        <option key={topic} value={topic}>{topic}</option>
+                                    ))}
+                                </select>
+                                <div className={Styles.categorySelectArrow}>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className={Styles.questionList}>
+                        {filteredQuestions.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
+                                No questions match the selected filters.
+                            </div>
+                        ) : (
+                            filteredQuestions.map((q, index) => (
+                                <div key={`${q.questionId || 'q'}-${index}`} className={Styles.questionItem}>
+                                    <div className={Styles.questionNumber}>Q{index + 1}</div>
+                                    <div className={Styles.questionDetails}>
+                                        <div className={Styles.questionText}>
+                                            <MathRenderer content={q.question} />
+                                        </div>
+                                        {q.image && (
+                                            <img
+                                                src={q.image}
+                                                alt="Question Visual"
+                                                style={{ maxWidth: '100%', maxHeight: '200px', display: 'block', marginTop: '10px', marginBottom: '10px' }}
+                                            />
+                                        )}
+                                        <span className={Styles.topicBadge}>{q.topic}</span>
+                                        <div className={Styles.answerSection}>
+                                            <div className={Styles.answerRow}>
+                                                <span className={Styles.answerLabel}>Correct Answer:</span>
+                                                <div className={Styles.correctAnswer}>
+                                                    {renderAnswer(q.correctAnswer)}
+                                                </div>
+                                            </div>
+                                            <div className={Styles.answerRow}>
+                                                <span className={Styles.answerLabel}>Your Answer:</span>
+                                                <div className={`${Styles.userAnswer} ${q.isCorrect ? Styles.correct : (q.attempted ? Styles.wrong : Styles.skipped)}`}>
+                                                    {q.userAnswer ? renderAnswer(q.userAnswer) : "Not Attempted"}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {q.type === 'factorTree' && q.tree && (
+                                            <div style={{ marginTop: '16px', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '12px', overflowX: 'auto' }}>
+                                                <div style={{ minWidth: '300px' }}>
+                                                    <TypeFactorTree
+                                                        treeDataProp={q.tree}
+                                                        userAnswersProp={q.userAnswer ? JSON.parse(q.userAnswer) : {}}
+                                                        readOnly={true}
+                                                        onClick={null}
+                                                        onPrevious={null}
+                                                        onAnswerChange={null}
+                                                        questionPaper={null}
+                                                        activeQuestionIndex={0}
+                                                        topic={q.topic}
+                                                        grade={null}
+                                                        timeTakeRef={null}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                        {q.type === 'tableInput' && q.rows && q.rows.length > 0 && q.rows[0].image && (
+                                            <div style={{ marginTop: '16px' }}>
+                                                {/* Desktop Table View */}
+                                                <div className="fve-desktop-table">
+                                                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', overflowX: 'auto' }}>
+                                                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                                            <thead>
+                                                                <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                                                                    {/* Dynamic headers from question.headers */}
+                                                                    {(q.headers || ['Shape', 'Image', 'Faces (F)', 'Vertices (V)', 'Edges (E)']).map((header, idx) => (
+                                                                        <th key={idx} style={{ padding: '12px', textAlign: idx === 0 ? 'left' : 'center', fontWeight: '600', color: '#475569' }}>
+                                                                            {header}
+                                                                        </th>
+                                                                    ))}
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {q.rows.map((row, idx) => {
+                                                                    const userAns = q.userAnswer ? JSON.parse(q.userAnswer)[idx] : {};
+                                                                    const correctAns = q.correctAnswer ? JSON.parse(q.correctAnswer)[idx] : {};
+                                                                    // Determine input keys (e.g., ['perimeter', 'area'] or ['faces', 'vertices', 'edges'])
+                                                                    const inputKeys = q.inputKeys || ['faces', 'vertices', 'edges'];
+                                                                    const headers = q.headers || ['Shape', 'Image', 'Faces (F)', 'Vertices (V)', 'Edges (E)'];
+                                                                    const hasImageColumn = headers.includes('Image');
+
+                                                                    return (
+                                                                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                                            {/* Shape column - includes image if no separate Image column */}
+                                                                            <td style={{ padding: '12px', fontWeight: '500' }}>
+                                                                                {!hasImageColumn && row.image && (
+                                                                                    <div style={{ marginBottom: '8px', textAlign: 'center' }}>
+                                                                                        {typeof row.image === 'string' && row.image.startsWith('<svg') ? (
+                                                                                            <div dangerouslySetInnerHTML={{ __html: row.image }} style={{ display: 'inline-block' }} />
+                                                                                        ) : (
+                                                                                            <img src={row.image} alt={row.text} style={{ maxWidth: '120px', maxHeight: '100px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
+                                                                                        )}
+                                                                                    </div>
+                                                                                )}
+                                                                                <div style={{ textAlign: hasImageColumn ? 'left' : 'center', fontWeight: '600' }}>{row.text}</div>
+                                                                            </td>
+                                                                            {/* Separate Image column - only if headers include "Image" */}
+                                                                            {hasImageColumn && (
+                                                                                <td style={{ padding: '12px', textAlign: 'center' }}>
+                                                                                    {row.image && (
+                                                                                        typeof row.image === 'string' && row.image.startsWith('<svg') ? (
+                                                                                            <div dangerouslySetInnerHTML={{ __html: row.image }} style={{ display: 'inline-block' }} />
+                                                                                        ) : (
+                                                                                            <img src={row.image} alt={row.text} style={{ maxWidth: '80px', maxHeight: '80px', objectFit: 'contain' }} />
+                                                                                        )
+                                                                                    )}
+                                                                                </td>
+                                                                            )}
+                                                                            {/* Dynamic columns based on inputKeys */}
+                                                                            {inputKeys.map((key) => (
+                                                                                <td key={key} style={{ padding: '12px', textAlign: 'center' }}>
+                                                                                    <div style={{ color: userAns?.[key] == correctAns?.[key] ? '#16a34a' : '#dc2626', fontWeight: '600' }}>
+                                                                                        {userAns?.[key] || '-'}
+                                                                                    </div>
+                                                                                    <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '4px' }}>
+                                                                                        (Correct: {correctAns?.[key]})
+                                                                                    </div>
+                                                                                </td>
+                                                                            ))}
+                                                                        </tr>
+                                                                    );
+                                                                })}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+
+                                                {/* Mobile Card View */}
+                                                <div className="fve-mobile-cards">
+                                                    {q.rows.map((row, idx) => {
+                                                        const userAns = q.userAnswer ? JSON.parse(q.userAnswer)[idx] : {};
+                                                        const correctAns = q.correctAnswer ? JSON.parse(q.correctAnswer)[idx] : {};
+                                                        const inputKeys = q.inputKeys || ['faces', 'vertices', 'edges'];
+                                                        const headers = q.headers || ['Shape', 'Image', 'Faces (F)', 'Vertices (V)', 'Edges (E)'];
+                                                        const hasImageColumn = headers.includes('Image');
+                                                        // Get labels for the input fields (skip Shape, and Image if present)
+                                                        const fieldLabels = hasImageColumn ? headers.slice(2) : headers.slice(1);
+
+                                                        return (
+                                                            <div key={idx} style={{
+                                                                border: '1px solid #e2e8f0',
+                                                                borderRadius: '12px',
+                                                                padding: '16px',
+                                                                marginBottom: '12px',
+                                                                background: '#fff'
+                                                            }}>
+                                                                {/* Shape Name and Image */}
+                                                                <div style={{ marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
+                                                                    {row.image && (
+                                                                        <div style={{ textAlign: 'center', marginBottom: '12px' }}>
+                                                                            {typeof row.image === 'string' && row.image.startsWith('<svg') ? (
+                                                                                <div dangerouslySetInnerHTML={{ __html: row.image }} style={{ display: 'inline-block', maxWidth: '120px', maxHeight: '100px' }} />
+                                                                            ) : (
+                                                                                <img src={row.image} alt={row.text} style={{ maxWidth: '120px', maxHeight: '100px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+                                                                    <div style={{ fontSize: '1.1rem', fontWeight: '600', color: '#1e293b', textAlign: 'center' }}>{row.text}</div>
+                                                                </div>
+
+                                                                {/* Dynamic Fields Grid */}
+                                                                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${inputKeys.length}, 1fr)`, gap: '12px' }}>
+                                                                    {inputKeys.map((key, keyIdx) => (
+                                                                        <div key={key} style={{ textAlign: 'center' }}>
+                                                                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                                                                {fieldLabels[keyIdx] || key}
+                                                                            </div>
+                                                                            <div style={{
+                                                                                fontSize: '1.5rem',
+                                                                                fontWeight: '700',
+                                                                                color: userAns?.[key] == correctAns?.[key] ? '#16a34a' : '#dc2626',
+                                                                                marginBottom: '4px'
+                                                                            }}>
+                                                                                {userAns?.[key] || '-'}
+                                                                            </div>
+                                                                            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                                                                ✓ {correctAns?.[key]}
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+
+                                                <style jsx>{`
+                                                    @media (min-width: 768px) {
+                                                        .fve-desktop-table { display: block !important; }
+                                                        .fve-mobile-cards { display: none !important; }
+                                                    }
+                                                    @media (max-width: 767px) {
+                                                        .fve-desktop-table { display: none !important; }
+                                                        .fve-mobile-cards { display: block !important; }
+                                                    }
+                                                `}</style>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className={Styles.questionStatus}>
+                                        {(() => {
+                                            // q.score is now available from analyzeResponses
+                                            const score = q.score !== undefined ? q.score : (q.isCorrect ? 1 : 0);
+                                            const isPartial = score > 0 && score < 1;
+                                            const isCorrect = score === 1;
+                                            const isWrong = score === 0 && q.attempted;
+                                            const isSkipped = !q.attempted;
+
+                                            let statusClass = Styles.statusSkipped;
+                                            let Icon = HelpCircle;
+                                            let text = "Not Answered";
+
+                                            if (isCorrect) {
+                                                statusClass = Styles.statusCorrect;
+                                                Icon = CheckCircle;
+                                                text = "Correct";
+                                            } else if (isPartial) {
+                                                statusClass = Styles.statusPartial;
+                                                Icon = AlertCircle;
+                                                text = "Partially Correct";
+                                            } else if (isWrong) {
+                                                statusClass = Styles.statusWrong;
+                                                Icon = XCircle;
+                                                text = "Wrong";
+                                            }
+
+                                            return (
+                                                <div className={`${Styles.statusBadge} ${statusClass}`}>
+                                                    <Icon size={16} />
+                                                    <span>{text}</span>
+                                                </div>
+                                            );
+                                        })()}
+                                        <div className={Styles.timeInfo}>
+                                            <Clock size={14} />
+                                            <span>{q.timeTaken !== null ? `${q.timeTaken}s` : "N/A"}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog >
+
+            <Footer />
+        </div >
+    );
+};
+
+export default QuizResultClient;

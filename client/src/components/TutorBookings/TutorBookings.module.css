@@ -1,0 +1,35 @@
+.pageWrapper {
+    @apply min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col;
+}
+
+.contentWrapper {
+    @apply flex-1 container mx-auto px-4 py-8 max-w-5xl;
+}
+
+.header {
+    @apply mb-8 text-center sm:text-left;
+}
+
+.title {
+    @apply font-bold text-slate-800 dark:text-white mb-2;
+}
+
+.subtitle {
+    @apply text-slate-500 dark:text-slate-400;
+}
+
+.loadingWrapper {
+    @apply flex justify-center py-20;
+}
+
+.emptyState {
+    @apply flex flex-col items-center justify-center py-16 px-4 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 text-center;
+}
+
+.emptyHint {
+    @apply mt-2 text-slate-400 max-w-md;
+}
+
+.tableCard {
+    @apply overflow-hidden rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800;
+}
