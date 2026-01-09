@@ -162,6 +162,8 @@ const StudentList = ({ students, onDelete, assessmentType = 'standard' }) => {
     const handleViewFullReport = () => {
         // Use displayedReport if available (this contains the currently selected history item or the default latest report)
         const reportData = displayedReport || selectedStudent;
+        console.log("View Full Report - Student:", selectedStudent);
+        console.log("View Full Report - ReportData:", reportData);
 
         if (!reportData?.marks && !reportData?.rapidMath) {
             alert('No quiz report available for this student');
@@ -190,12 +192,13 @@ const StudentList = ({ students, onDelete, assessmentType = 'standard' }) => {
 
         const reportIdParam = reportId ? `&reportId=${reportId}` : '';
         const parentKeyParam = (reportData.reportParentKey || selectedStudent.reportParentKey) ? `&parentKey=${reportData.reportParentKey || selectedStudent.reportParentKey}` : '';
+        const childIdParam = (reportData.childId || selectedStudent.childId) ? `&childId=${reportData.childId || selectedStudent.childId}` : '';
 
         // Navigate to appropriate page based on report type
         if (isRapidMath) {
-            navigate(`/rapid-math/test/summary?phone=${encodeURIComponent(phoneNumber)}&adminView=true${reportIdParam}${parentKeyParam}`);
+            navigate(`/rapid-math/test/summary?phone=${encodeURIComponent(phoneNumber)}&adminView=true${reportIdParam}${parentKeyParam}${childIdParam}`);
         } else {
-            navigate(`/quiz/quiz-result?phone=${encodeURIComponent(phoneNumber)}&adminView=true${reportIdParam}${parentKeyParam}`);
+            navigate(`/quiz/quiz-result?phone=${encodeURIComponent(phoneNumber)}&adminView=true${reportIdParam}${parentKeyParam}${childIdParam}`);
         }
     };
 
@@ -656,6 +659,7 @@ const StudentList = ({ students, onDelete, assessmentType = 'standard' }) => {
                     <TableHead sx={{ bgcolor: '#f5f5f5' }}>
                         <TableRow>
                             <TableCell sx={{ fontWeight: 'bold' }}>Student Name</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Auth Method</TableCell>
                             <TableCell sx={{ fontWeight: 'bold' }}>User ID</TableCell>
                             {/* Standard Columns */}
                             {viewMode === 'standard' && <TableCell sx={{ fontWeight: 'bold' }}>Grade</TableCell>}
@@ -684,6 +688,21 @@ const StudentList = ({ students, onDelete, assessmentType = 'standard' }) => {
                                     >
                                         <TableCell component="th" scope="row" sx={{ fontWeight: 500 }}>
                                             {student.name}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                label={student.authProvider || 'Google'}
+                                                size="small"
+                                                variant={student.authProvider === 'Google' || student.authProvider === 'Child' ? 'filled' : 'outlined'}
+                                                color={student.authProvider === 'Google' ? 'primary' : student.authProvider === 'Child' ? 'success' : 'default'}
+                                                sx={{
+                                                    height: 24,
+                                                    fontSize: '0.75rem',
+                                                    bgcolor: student.authProvider === 'Google' ? '#e3f2fd' : student.authProvider === 'Child' ? '#e8f5e9' : 'transparent',
+                                                    color: student.authProvider === 'Google' ? '#1565c0' : student.authProvider === 'Child' ? '#2e7d32' : 'inherit',
+                                                    border: (student.authProvider === 'Google' || student.authProvider === 'Child') ? 'none' : '1px solid #bdbdbd'
+                                                }}
+                                            />
                                         </TableCell>
                                         <TableCell>
                                             {student.email?.toLowerCase().endsWith('@lgs.com')

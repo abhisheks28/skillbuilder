@@ -215,10 +215,12 @@ async def get_admin_students(skip: int = 0, limit: int = 50):
     pool = await get_db_pool()
     async with pool.acquire() as conn:
         # Fetch students with some details
-        # Using LEFT JOIN on parents to get fallback phone number
+        # Using LEFT JOIN on parents to get fallback phone number and email, AND parent user_id
         rows = await conn.fetch("""
-            SELECT s.*, u.created_at, u.firebase_uid, u.role, 
-                   COALESCE(s.phone_number, p.phone_number) as resolved_phone
+            SELECT s.*, u.created_at, u.firebase_uid, u.role, u.name as user_name, 
+                   COALESCE(s.phone_number, p.phone_number) as resolved_phone,
+                   p.email_id as parent_email,
+                   p.user_id as parent_user_id
             FROM students s
             JOIN users u ON s.user_id = u.user_id
             LEFT JOIN parents p ON s.parent_id = p.parent_id
@@ -227,6 +229,7 @@ async def get_admin_students(skip: int = 0, limit: int = 50):
         """, skip, limit)
         
         student_ids = [r['student_id'] for r in rows]
+        student_ids_set = set(student_ids) # For fast lookup
         
         student_user_map = {}
         reports_map = {}
@@ -235,24 +238,34 @@ async def get_admin_students(skip: int = 0, limit: int = 50):
         student_history = {} # Added initialization
 
         if student_ids:
-             # Get user_ids for these students to query reports
+             # Get user_ids for these students to query reports DIRECTLY
             student_user_map_rows = await conn.fetch("SELECT student_id, user_id FROM students WHERE student_id = ANY($1::int[])", student_ids)
             student_user_map = {r['user_id']: r['student_id'] for r in student_user_map_rows}
-            user_ids = list(student_user_map.keys())
+            
+            # Also get parent user_ids to query reports INDIRECTLY
+            parent_user_ids = set()
+            for r in rows:
+                if r['parent_user_id']:
+                    parent_user_ids.add(r['parent_user_id'])
+            
+            # Combine all relevant user IDs
+            all_target_user_ids = list(set(student_user_map.keys()) | parent_user_ids)
 
             # Fetch all reports to process in Python for accurate counts and classification
-            # We can't rely on SQL grouping easily due to JSON inspection needed for 'totalTime' heuristic
             all_reports = await conn.fetch("""
                 SELECT user_id, report_json, created_at, report_id,
                        COALESCE(report_json->>'type', 'standard') as report_type
                 FROM reports
                 WHERE user_id = ANY($1::int[])
                 ORDER BY created_at DESC
-            """, user_ids)
+            """, all_target_user_ids)
 
             for r in all_reports:
-                if r['user_id'] not in student_user_map: continue
-                sid = student_user_map[r['user_id']]
+                sid = None
+                
+                # Check 1: Direct Link (User ID matches Student User ID)
+                if r['user_id'] in student_user_map:
+                    sid = student_user_map[r['user_id']]
                 
                 data = r['report_json']
                 if isinstance(data, str):
@@ -260,7 +273,25 @@ async def get_admin_students(skip: int = 0, limit: int = 50):
                         data = json.loads(data)
                     except:
                         data = {}
-                        
+                
+                # Check 2: Indirect Link (via childId in JSON, stored under Parent)
+                if sid is None:
+                    child_id = data.get('childId')
+                    # Ensure integer comparison if child_id exists
+                    if child_id is not None:
+                        try:
+                            child_id_int = int(child_id)
+                            if child_id_int in student_ids_set:
+                                sid = child_id_int
+                        except:
+                            pass
+                
+                # If still no SID, skip this report (it's a parent's personal report or unrelated)
+                if sid is None:
+                    continue
+
+                # ... (rest of processing logic) ...
+                
                 rtype = r['report_type'].lower() if r['report_type'] else 'standard'
                 summary = data.get('summary', {})
                 is_rapid_content = 'totalTime' in summary
@@ -312,6 +343,7 @@ async def get_admin_students(skip: int = 0, limit: int = 50):
                     "totalQuestions": int(summary.get('totalQuestions', 0)),
                     "timeTaken": int(summary.get('totalTime', 0)) if 'totalTime' in summary else None,
                     "reportId": r.get('report_id'), 
+                    "childId": str(sid),
                     "summary": summary,
                     "perQuestionReport": data.get('perQuestionReport', []),
                     "topicFeedback": data.get('topicFeedback', {}),
@@ -325,9 +357,20 @@ async def get_admin_students(skip: int = 0, limit: int = 50):
                     } if hist_type == 'rapid' else None
                 })
 
+        # Get Credentials Map to determine Auth Provider
+        # If user_id is in credentials table, they have Email/Pass. If not, they are Google/Phone only.
+        # But we need to check specifically.
+        user_ids_for_creds = [r['user_id'] for r in rows]
+        
+        creds_rows = await conn.fetch("SELECT user_id FROM credentials WHERE user_id = ANY($1::int[])", user_ids_for_creds)
+        email_user_ids = set(r['user_id'] for r in creds_rows)
+        
         students = []
         for r in rows:
             sid = r['student_id']
+            # User ID calculation needs to handle potential missing user_id if logic was looser, but our query ensures it.
+            uid_int = r['user_id']
+            
             std_data = reports_map.get(sid, {})
             rapid_data = rapid_map.get(sid, {})
             hist = student_history.get(sid, [])
@@ -338,13 +381,19 @@ async def get_admin_students(skip: int = 0, limit: int = 50):
             # Safe get counts
             counts = count_map.get(sid, {'standard': 0, 'rapid': 0})
             
+            # Auth Provider Logic
+            if uid_int in email_user_ids:
+                auth_provider = 'Email'
+            else:
+                auth_provider = 'Google'
+            
             students.append({
                 "id": r['firebase_uid'] or str(r['user_id']),
-                "name": r['parent_name'] or r.get('name', 'Unknown'), 
+                "name": r['user_name'] or r.get('name', 'Unknown'), # Prefer user name from join
                 "childId": str(r['student_id']),
                 "grade": r['grade'],
                 "school": r['school'],
-                "email": r['email_id'],
+                "email": r['email_id'] or r['parent_email'], # Try student email then parent fallback
                 "phoneNumber": r['resolved_phone'], 
                 "joinedAt": r['created_at'].isoformat() if r['created_at'] else None,
                 "attemptCount": counts.get('standard', 0), # Standard attempts only
@@ -353,9 +402,10 @@ async def get_admin_students(skip: int = 0, limit: int = 50):
                 "topicFeedback": std_data.get('topicFeedback'), 
                 "learningPlan": std_data.get('learningPlan'),
                 "summary": std_data.get('summary'),
-                "perQuestionReport": std_data.get('perQuestionReport'), # Might as well add this if available/extracted
+                "perQuestionReport": std_data.get('perQuestionReport'),
                 "rapidMath": rapid_data if rapid_data else None,
-                "history": hist 
+                "history": hist,
+                "authProvider": auth_provider 
             })
             
         return students
