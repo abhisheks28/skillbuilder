@@ -146,6 +146,45 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // Google Login Function
+    const loginWithGoogle = async () => {
+        try {
+            const { signInWithPopup } = await import("firebase/auth");
+            const { auth, googleProvider } = await import("../../../firebase");
+
+            const result = await signInWithPopup(auth, googleProvider);
+            const user = result.user;
+
+            // Sync with backend
+            const response = await fetch('/api/auth/google', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    uid: user.uid,
+                    email: user.email,
+                    name: user.displayName || user.email.split('@')[0],
+                    photoURL: user.photoURL
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                localStorage.setItem('authToken', data.token);
+                localStorage.setItem('authUser', JSON.stringify(data.user));
+                setUser(data.user);
+                await fetchUserData(data.user.uid);
+                return { success: true, user: data.user };
+            } else {
+                return { success: false, message: "Backend sync failed" };
+            }
+
+        } catch (error) {
+            console.error("Google Sign In Error:", error);
+            return { success: false, message: error.message };
+        }
+    };
+
     // New Register Function
     const register = async (payload) => {
         // Payload expected: email, password, name, role, grade (opt), etc.
@@ -194,6 +233,7 @@ export const AuthProvider = ({ children }) => {
             setActiveChildId: updateActiveChild,
             loading,
             login,
+            loginWithGoogle,
             register,
             logout,
             setUserData,

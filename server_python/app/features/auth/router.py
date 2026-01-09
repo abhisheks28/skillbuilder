@@ -141,6 +141,73 @@ async def login(request: LoginRequest):
             }
         }
 
+from app.models.schemas import GoogleLoginRequest
+
+@router.post("/google")
+async def google_login(request: GoogleLoginRequest):
+    pool = await get_db_pool()
+    uid = request.uid
+    email = request.email
+    name = request.name
+    
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # 1. Check if user exists
+            user_row = await conn.fetchrow(
+                "SELECT user_id, role, name FROM users WHERE firebase_uid = $1", 
+                uid
+            )
+
+            if user_row:
+                # Existing User
+                user_id = user_row['user_id']
+                role = user_row['role']
+                # Generate Token
+                access_token = create_access_token(subject=uid)
+                return {
+                    "success": True,
+                    "token": access_token,
+                    "user": {
+                        "uid": uid,
+                        "name": user_row['name'],
+                        "email": email,
+                        "role": role,
+                        "user_id": user_id
+                    }
+                }
+            else:
+                # 2. New User - Create
+                # Default role: student
+                role = 'student'
+                
+                # Create in users table
+                user_id = await conn.fetchval(
+                    "INSERT INTO users (name, role, firebase_uid) VALUES ($1, $2, $3) RETURNING user_id",
+                    name, role, uid
+                )
+                
+                # Create in students table (as default)
+                await conn.execute(
+                    "INSERT INTO students (user_id, email_id, parent_name) VALUES ($1, $2, $3)",
+                    user_id, email, name # Use own name as parent name placeholder if needed or leave null. Schema says parent_name
+                )
+                
+                # Generate Token
+                access_token = create_access_token(subject=uid)
+                
+                return {
+                    "success": True,
+                    "token": access_token, 
+                    "isNewUser": True,
+                    "user": {
+                        "uid": uid,
+                        "name": name,
+                        "email": email,
+                        "role": role,
+                        "user_id": user_id
+                    }
+                }
+
 from app.core.config import settings
 
 @router.post("/admin-login")
