@@ -5,23 +5,23 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 // Context Providers
-import { AuthProvider } from "@/context/AuthContext";
-import QuizProvider, { QuizSessionContext } from "@/context/QuizSessionContext";
+import { AuthProvider } from "@/features/auth/context/AuthContext";
+import QuizProvider, { QuizSessionContext } from "@/features/quiz/context/QuizSessionContext";
 import MuiProvider from "@/components/MuiProvider/MuiProvider";
 
 // Pages
 import Home from "@/pages/Home";
 import AdminDashboard from "@/pages/AdminDashboard";
-import AdminLoginClient from "@/components/AdminLogin/AdminLoginClient";
-import DashboardClient from "@/components/Dashboard/DashboardClient";
-import TeacherDashboard from "@/components/Dashboard/TeacherDashboard";
-import TeacherStudentView from "@/components/Dashboard/TeacherStudentView";
-import LotteryPage from "@/components/Lottery/LotteryPage.component";
-import NeetClient from "@/components/Neet/NeetClient";
-import PracticeClient from "@/components/Practice/PracticeClient";
-import QuizClient from "@/components/Quiz/QuizClient";
-import QuizResultClient from "@/components/Quiz/QuizResultClient";
-import TutorBookingsClient from "@/components/TutorBookings/TutorBookingsClient";
+import AdminLoginClient from "@/features/auth/components/AdminLogin/AdminLoginClient";
+import DashboardClient from "@/features/dashboard/components/DashboardClient";
+import TeacherDashboard from "@/features/dashboard/components/TeacherDashboard";
+import TeacherStudentView from "@/features/dashboard/components/TeacherStudentView";
+import LotteryPage from "@/features/lottery/components/LotteryPage.component";
+import NeetClient from "@/features/neet/components/NeetClient";
+import PracticeClient from "@/features/practice/components/PracticeClient";
+import QuizClient from "@/features/quiz/components/QuizClient";
+import QuizResultClient from "@/features/quiz/components/QuizResultClient";
+import TutorBookingsClient from "@/features/tutor-bookings/components/TutorBookingsClient";
 import RapidMath from "@/pages/RapidMath";
 import RapidMathTest from "@/pages/RapidMathTest";
 import RapidMathSummary from "@/pages/RapidMathSummary";

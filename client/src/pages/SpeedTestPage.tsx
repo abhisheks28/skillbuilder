@@ -1,7 +1,7 @@
 "use client"
 
 import Header from "@/pages/homepage/Header"
-import { SpeedTestGame } from "@/components/RapidMath/SpeedTest/SpeedTestGame"
+import { SpeedTestGame } from "@/features/rapid-math/components/SpeedTest/SpeedTestGame"
 
 export default function SpeedTestPage() {
     return (

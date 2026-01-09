@@ -1,0 +1,1138 @@
+"use client";
+import React, { useEffect, useState, useContext } from "react";
+import { useAuth } from "@/features/auth/context/AuthContext";
+import { useNavigate } from "react-router-dom";
+import Header from "@/pages/homepage/Header";
+import Footer from "@/components/Footer/Footer.component";
+import PhoneNumberDialog from "@/features/auth/components/PhoneNumberDialog";
+import { CircularProgress, Button, FormControl, InputLabel, Select, MenuItem, TextField, Dialog, DialogTitle, DialogContent, Card, CardContent, Tabs, Tab } from "@mui/material";
+import { User, LogOut, BookOpen, Clock, Award, ChevronRight, Edit2, GraduationCap, Zap, Plus as PlusIcon, Users, X, Flame, Target, TrendingUp, Globe, Lightbulb, Dna } from "lucide-react";
+import { getUserDatabaseKey } from "@/utils/authUtils";
+import Styles from "./Dashboard.module.css";
+import { QuizSessionContext } from "@/features/quiz/context/QuizSessionContext";
+import ProgressChart from "./ProgressChart";
+import PuzzleCard from "./PuzzleCard";
+
+const DashboardClient = () => {
+    const { user, userData, setUserData, logout, loading, refreshUserData, activeChildId, setActiveChildId } = useAuth();
+    const navigate = useNavigate();
+    const [quizContext, setQuizContext] = useContext(QuizSessionContext);
+    const [showProfileList, setShowProfileList] = useState(false); // Toggle for Profile/Stats view
+    const profileCardRef = React.useRef(null); // Ref for click outside logic
+
+    // Close profile list when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (profileCardRef.current && !profileCardRef.current.contains(event.target)) {
+                setShowProfileList(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, []);
+    const [reports, setReports] = useState(null);
+    const [fetchingReports, setFetchingReports] = useState(false);
+    const [reportsCache, setReportsCache] = useState({});
+
+
+
+
+    // Phone number dialog state
+    const [showPhoneDialog, setShowPhoneDialog] = useState(false);
+
+    const [addChildOpen, setAddChildOpen] = useState(false);
+
+    const [editChildOpen, setEditChildOpen] = useState(false);
+    const [editingChildId, setEditingChildId] = useState(null);
+    // Sync activeChildId from localStorage if context is empty
+    useEffect(() => {
+        if (!activeChildId && typeof window !== "undefined") {
+            try {
+                const storedUser = JSON.parse(window.localStorage.getItem("quizSession") || "{}")?.userDetails;
+
+                // Fallback to quizSession activeChildId if available
+                if (storedUser?.activeChildId) {
+                    setActiveChildId(storedUser.activeChildId);
+                    return;
+                }
+
+                // Try to get from localStorage using userKey
+                const userKey = user ? getUserDatabaseKey(user) : (storedUser?.userKey || null);
+                if (userKey) {
+                    const storedChildId = window.localStorage.getItem(`activeChild_${userKey}`);
+                    if (storedChildId) {
+                        setActiveChildId(storedChildId);
+                    }
+                }
+            } catch (e) {
+                console.error("Error syncing activeChildId:", e);
+            }
+        }
+    }, [activeChildId, setActiveChildId, user]);
+    const [childForm, setChildForm] = useState({
+        name: "",
+        grade: ""
+    });
+
+    const [activeTab, setActiveTab] = useState(0);
+    const [showAllAssessments, setShowAllAssessments] = useState(false);
+    const [showAllRapidMath, setShowAllRapidMath] = useState(false);
+    const [showAllNeet, setShowAllNeet] = useState(false);
+
+    const handleTabChange = (event, newValue) => {
+        setActiveTab(newValue);
+    };
+
+    // Redirect teachers to teacher dashboard
+    useEffect(() => {
+        if (!loading && user && userData) {
+            // Check if user is a teacher
+            if (userData.userType === 'teacher' || userData.isTeacher) {
+                console.log("👨‍🏫 Teacher detected, redirecting to teacher dashboard");
+                navigate("/teacher-dashboard", { replace: true });
+                return;
+            }
+        }
+    }, [user, userData, loading, navigate]);
+
+    // Check for local quiz session before redirecting
+    useEffect(() => {
+        if (!loading && !user) {
+            // Check for local quiz session before redirecting
+            if (typeof window !== "undefined") {
+                const quizSession = window.localStorage.getItem("quizSession");
+                if (quizSession) {
+                    try {
+                        const parsed = JSON.parse(quizSession);
+                        if (parsed?.userDetails) {
+                            // Valid local session, do not redirect
+                            return;
+                        }
+                    } catch (e) { }
+                }
+            }
+            navigate("/", { replace: true });
+        }
+    }, [user, loading, navigate]);
+
+    // Check if Google/Email user needs to provide phone number
+    useEffect(() => {
+        if (!loading && user) {
+            // For phone auth users, never show dialog (they already have phone)
+            if (user.phoneNumber) {
+                setShowPhoneDialog(false);
+                return;
+            }
+
+            // IMPORTANT: Wait for userData to load before making any decision
+            if (!userData) {
+                // console.log("⏳ Waiting for userData to load...");
+                setShowPhoneDialog(false);
+                return;
+            }
+
+            // Phone collection is no longer required as it is collected during registration
+            setShowPhoneDialog(false);
+            return;
+
+            /* 
+            // OLD LOGIC - Preserved for reference but disabled
+            // Check localStorage flag - if user EVER provided phone, never ask again
+            const userKey = getUserDatabaseKey(user);
+            const phoneProvided = typeof window !== "undefined"
+                ? window.localStorage.getItem(`phoneProvided_${userKey}`)
+                : null;
+
+            if (phoneProvided === "true") {
+                // console.log("✅ Phone already provided (localStorage flag)");
+                setShowPhoneDialog(false);
+                return;
+            }
+
+            // Check if phone exists in database
+            const hasPhoneInDB = userData.phoneNumber || userData.parentPhone;
+
+            if (hasPhoneInDB) {
+                // Phone exists in database - don't show dialog
+                setShowPhoneDialog(false);
+            } else {
+                // Brand new user with no phone - show dialog
+                setShowPhoneDialog(true);
+            }
+            */
+        }
+    }, [user, userData, loading]);
+
+    // Handle phone number completion
+    const handlePhoneComplete = async (phoneNumber) => {
+        setShowPhoneDialog(false);
+
+        // SIMPLE FIX: Mark phone as provided in localStorage
+        if (user && typeof window !== "undefined") {
+            const userKey = getUserDatabaseKey(user);
+            window.localStorage.setItem(`phoneProvided_${userKey}`, "true");
+            console.log("✅ Phone number saved, localStorage flag set");
+        }
+
+        // Use the refreshUserData function from AuthContext to reload data
+        if (refreshUserData) {
+            try {
+                await refreshUserData();
+            } catch (error) {
+                console.error("Error refreshing user data:", error);
+                // Fallback: update local state manually
+                setUserData({
+                    ...userData,
+                    phoneNumber: phoneNumber,
+                    parentPhone: phoneNumber
+                });
+            }
+        }
+    };
+
+    // Initialize active child based on userData and persisted preference
+    // NOTE: This is now handled by AuthContext, but we keep this for backward compatibility
+    // with any local-only logic that might depend on it
+    useEffect(() => {
+        // AuthContext now handles activeChildId initialization
+        // This effect is kept for any dashboard-specific logic if needed
+    }, [user, userData, activeChildId]);
+
+    // Fetch reports for the selected child, with simple per-child caching
+    useEffect(() => {
+        const fetchReports = async () => {
+            if (activeChildId) {
+                setFetchingReports(true);
+                try {
+                    // Use User's Firebase UID and optionally Child ID to fetch reports
+                    const currentUid = user?.uid;
+                    if (!currentUid) return;
+
+                    console.log("[DashboardClient] Fetching reports from API for:", currentUid, activeChildId);
+
+                    // Call Python Backend API
+                    // Note: API expects 'uid' query param which maps to firebase_uid in users table
+                    // It also accepts 'childId' to filter specific child's reports if needed
+                    const response = await fetch(`/api/reports?uid=${currentUid}&childId=${activeChildId}`);
+                    const result = await response.json();
+
+                    if (result.success && result.data) {
+                        // Transform DB row format to expected frontend format if necessary
+                        // Backend returns list of objects: [{ report_id, report_json, created_at, ... }]
+                        // Frontend expects object with report keys or array of objects.
+                        // The existing logic below handles Object.entries(reports), so we might need to adapt.
+                        // Let's coerce the array into an object keyed by report_id for compatibility.
+
+                        const reportsMap = {};
+                        result.data.forEach(row => {
+                            if (row.report_json) {
+                                let reportData = typeof row.report_json === 'string' ? JSON.parse(row.report_json) : row.report_json;
+                                // Inject timestamp from row if missing in JSON
+                                if (!reportData.timestamp) reportData.timestamp = row.created_at;
+                                reportsMap[row.report_id] = { id: row.report_id, ...reportData };
+                            }
+                        });
+
+                        console.log("[DashboardClient] Processed API reports:", Object.keys(reportsMap).length);
+                        setReports(reportsMap);
+                        setReportsCache((prev) => ({
+                            ...prev,
+                            [activeChildId]: reportsMap,
+                        }));
+                    } else {
+                        setReports(null);
+                    }
+                } catch (error) {
+                    console.error("Error fetching reports:", error);
+                } finally {
+                    setFetchingReports(false);
+                }
+            }
+        };
+        if (activeChildId) {
+            // Always fetch fresh data to ensure we show the latest reports
+            fetchReports();
+        }
+    }, [user, activeChildId]);
+
+    // Hydration-safe local storage fallback
+    const [fallbackData, setFallbackData] = useState(null);
+
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            const session = window.localStorage.getItem("quizSession");
+            if (session) {
+                try {
+                    const parsed = JSON.parse(session);
+                    setFallbackData(parsed?.userDetails || null);
+                } catch (e) {
+                    console.error("Error parsing quizSession:", e);
+                }
+            }
+        }
+    }, []);
+
+    const effectiveUserData = userData || fallbackData;
+    const children = effectiveUserData?.children || null;
+
+    // Robust active child resolution
+    let activeChild = null;
+    let fallbackChildId = null; // Track fallback without setting state during render
+
+    if (children) {
+        if (activeChildId && children[activeChildId]) {
+            activeChild = children[activeChildId];
+        } else if (children['default']) {
+            // Fallback to 'default' child if it exists (legacy users)
+            activeChild = children['default'];
+            fallbackChildId = 'default';
+        } else {
+            // Last resort: take the first child found
+            const firstKey = Object.keys(children)[0];
+            if (firstKey) {
+                activeChild = children[firstKey];
+                fallbackChildId = firstKey;
+            }
+        }
+    }
+
+    // AUTO-REFRESH WORKAROUND: Force a reload once if profile data is missing
+    useEffect(() => {
+        // Condition: We have an Active ID (e.g., student_123) but NO matching profile in 'children'
+        // FIX: Check if children object is null OR if the specific child ID is missing
+        const isProfileMissing = activeChildId && (!children || !children[activeChildId]);
+
+        if (isProfileMissing) {
+            // Check if we already tried reloading to avoid infinite loop
+            const hasRetried = window.sessionStorage.getItem("dashboard_retry_v1");
+
+            if (!hasRetried) {
+                console.log("⚠️ Profile missing, forcing auto-refresh...");
+                window.sessionStorage.setItem("dashboard_retry_v1", "true");
+                window.location.reload();
+            }
+        } else {
+            // Data loaded successfully, clear the retry flag
+            if (activeChildId && children && children[activeChildId]) {
+                window.sessionStorage.removeItem("dashboard_retry_v1");
+            }
+        }
+    }, [activeChildId, children]);
+
+    // Set fallback child ID in useEffect to avoid setState during render
+    // Set fallback child ID in useEffect to avoid setState during render
+    useEffect(() => {
+        if (fallbackChildId) {
+            // Force update if no active ID OR if active ID is invalid (not in children)
+            if (!activeChildId || (children && !children[activeChildId])) {
+                console.log("Fixing activeChildId mismatch:", activeChildId, "->", fallbackChildId); // Debug
+                setActiveChildId(fallbackChildId);
+            }
+        }
+    }, [fallbackChildId, activeChildId, children, setActiveChildId]);
+
+    // FORCE GRADE SELECTION: If active child has no grade, open edit modal automatically
+    useEffect(() => {
+        if (!loading && activeChildId && children && children[activeChildId]) {
+            const child = children[activeChildId];
+            if (!child.grade || child.grade === "Select Grade" || child.grade === "N/A" || child.grade === "0" || child.grade === "") {
+                // Check if modal is already open to avoid loop
+                // using a ref or just checking state
+                if (!editChildOpen) {
+                    console.log("⚠️ Grade missing for active profile, compelling selection...");
+                    setChildForm({
+                        name: child.name,
+                        grade: ""
+                    });
+                    setEditingChildId(activeChildId);
+                    setEditChildOpen(true);
+                }
+            }
+        }
+    }, [activeChildId, children, loading, editChildOpen]);
+
+    if (loading) {
+        return (
+            <div className={Styles.loadingContainer}>
+                <CircularProgress />
+            </div>
+        );
+    }
+
+    const handleLogout = async () => {
+        // Clear local storage explicitly
+        if (typeof window !== "undefined") {
+            window.localStorage.removeItem("quizSession");
+        }
+        await logout();
+        navigate("/", { replace: true });
+    };
+
+    const handleChildChange = (event) => {
+        const newChildId = event.target.value;
+        // Use AuthContext's setActiveChildId which handles localStorage persistence
+        setActiveChildId(newChildId);
+    };
+
+    const handleOpenAddChild = () => {
+        setChildForm({
+            name: "",
+            grade: ""
+        });
+        setAddChildOpen(true);
+    };
+
+    const handleSaveChild = async () => {
+        if (!user || user.isAnonymous) return;
+
+        const { name, grade } = childForm;
+        if (!name || !grade) {
+            return;
+        }
+
+        // Use user.uid for API calls
+        const uid = user.uid;
+        const childPayload = {
+            name,
+            grade,
+            school: "",
+            parentPhone: userData?.phoneNumber || user.phoneNumber,
+            parentEmail: user.email
+        };
+
+        try {
+            const response = await fetch(`/api/users/${uid}/child`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(childPayload)
+            });
+            const result = await response.json();
+
+            if (result.success && result.data) {
+                // API returns the created child with student_id
+                const newChild = result.data;
+                const newChildId = String(newChild.student_id);
+
+                console.log("Child saved via API:", newChildId);
+
+                // Refresh user data from API
+                if (refreshUserData) {
+                    await refreshUserData();
+                } else {
+                    // Manual Fallback
+                    setUserData((prev) => {
+                        const prevChildren = prev?.children || {};
+                        return {
+                            ...(prev || {}),
+                            children: {
+                                ...prevChildren,
+                                [newChildId]: newChild
+                            }
+                        };
+                    });
+                }
+
+                setActiveChildId(newChildId);
+                if (typeof window !== "undefined") {
+                    // userKey logic for localStorage key... 
+                    const userKey = getUserDatabaseKey(user);
+                    window.localStorage.setItem(`activeChild_${userKey}`, newChildId);
+                }
+                setAddChildOpen(false);
+            } else {
+                console.error("API error saving child:", result);
+            }
+
+        } catch (error) {
+            console.error("Error saving child profile:", error);
+        }
+    };
+
+    const handleEditChild = () => {
+        if (!activeChild || !activeChildId) return;
+
+        setChildForm({
+            name: activeChild.name,
+            grade: activeChild.grade
+        });
+        setEditingChildId(activeChildId);
+        setEditChildOpen(true);
+    };
+
+    const handleUpdateChild = async () => {
+        if (!user || !editingChildId) return;
+
+        const { name, grade } = childForm;
+        if (!name || !grade) {
+            return;
+        }
+
+        const uid = user.uid;
+        const updates = { name, grade };
+
+        try {
+            // editingChildId should be the Student ID (numeric string)
+            // If it is a legacy firebase key (child_...) it might fail in backend unless handled.
+            // But we assume fresh data from API uses numeric IDs.
+            const response = await fetch(`/api/users/${uid}/child/${editingChildId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                // Update local state via refresh
+                if (refreshUserData) {
+                    await refreshUserData();
+                } else {
+                    // Manual Fallback
+                    setUserData((prev) => ({
+                        ...(prev || {}),
+                        children: {
+                            ...prev.children,
+                            [editingChildId]: {
+                                ...prev.children[editingChildId],
+                                ...updates
+                            }
+                        }
+                    }));
+                }
+                setEditChildOpen(false);
+                setEditingChildId(null);
+            } else {
+                console.error("API error updating child:", result);
+            }
+        } catch (error) {
+            console.error("Error updating child profile:", error);
+        }
+    };
+
+    const handleStartAssessment = (type = 'ASSESSMENT', reportsCount = 0) => {
+        // Check if we have user data (either from auth or local storage)
+        if (!effectiveUserData || !activeChild) {
+            navigate("/");
+            return;
+        }
+
+        // GUEST/NO-GRADE CHECK: If the user hasn't selected a grade yet, force them to do so.
+        if (!activeChild.grade || activeChild.grade === "Select Grade" || activeChild.grade === "N/A") {
+            // Open the edit modal for this child so they can pick a grade
+            setChildForm({
+                name: activeChild.name,
+                grade: "" // Reset to empty or keep "Select Grade" if logic prefers
+            });
+            setEditingChildId(activeChildId);
+            setEditChildOpen(true);
+            // Optional: alert can be added here, but the modal opening is self-explanatory
+            console.log("Grade missing, opening selection modal...");
+            return;
+        }
+
+        // Get user key - works for both authenticated and phone-only users
+        let userKey = null;
+        if (user) {
+            userKey = getUserDatabaseKey(user);
+        }
+        if (!userKey && effectiveUserData) {
+            userKey = effectiveUserData.userKey || effectiveUserData.phoneNumber || effectiveUserData.parentPhone || effectiveUserData.parentEmail;
+        }
+
+        if (!userKey) {
+            navigate("/");
+            return;
+        }
+
+        try {
+            if (typeof window !== "undefined") {
+                window.localStorage.removeItem("quizSession");
+            }
+        } catch (e) {
+            // ignore storage errors
+        }
+
+        const userDetails = {
+            ...activeChild,
+            phoneNumber: userKey, // Use userKey for backward compatibility
+            childId: activeChildId,
+            activeChildId: activeChildId,
+            attemptCount: reportsCount + 1, // Pass attempt number
+            testType: type
+        };
+        setQuizContext({ userDetails, questionPaper: null });
+        navigate(type === 'RAPID_MATH' ? "/rapid-math" : "/quiz");
+    };
+    return (
+        <div className={Styles.pageWrapper}>
+            <Header />
+
+            {/* Phone Number Collection Dialog for Google/Email Users */}
+            <PhoneNumberDialog
+                open={showPhoneDialog}
+                user={user}
+                onComplete={handlePhoneComplete}
+            />
+
+            <div className={Styles.dashboardContainer}>
+                {/* Profile Section - Sticky & Reorganized */}
+                <section ref={profileCardRef} className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 mb-6 relative overflow-hidden flex flex-col transition-all duration-300 z-10">
+                    <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-10 pointer-events-none" />
+
+                    <div className="relative z-10 flex-1 flex flex-col h-full">
+                        {/* --- ACTIVE PROFILE HEADER (Always Visible) --- */}
+                        {children && activeChildId && children[activeChildId] && (
+                            <div className="flex gap-4 mb-2 px-2">
+                                {/* Avatar */}
+                                <div className="relative group cursor-pointer shrink-0" onClick={handleEditChild}>
+                                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-blue-200 dark:shadow-blue-900 ring-4 ring-white dark:ring-slate-800 overflow-hidden transform transition-transform group-hover:scale-105">
+                                        {children[activeChildId].imageUrl ? (
+                                            <img src={children[activeChildId].imageUrl} alt={children[activeChildId].name} className="w-full h-full object-cover" />
+                                        ) : (
+                                            (children[activeChildId].name || "?").charAt(0).toUpperCase()
+                                        )}
+                                    </div>
+                                    <div className="absolute bottom-1 right-0 bg-white dark:bg-slate-700 p-1 rounded-full shadow-md border border-slate-100 dark:border-slate-600">
+                                        <div className="bg-emerald-500 w-3 h-3 rounded-full animate-pulse ring-2 ring-white dark:ring-slate-700" />
+                                    </div>
+                                </div>
+
+                                {/* Info & Controls */}
+                                <div className="flex-1 flex flex-col justify-center">
+                                    <h3 className="text-2xl font-bold text-slate-800 dark:text-white leading-tight mb-1 tracking-tight">
+                                        {children[activeChildId].name}
+                                    </h3>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className="inline-flex items-center px-2.5 py-0.5 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold uppercase tracking-wider rounded-md border border-blue-100 dark:border-blue-800">
+                                            {children[activeChildId].grade}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* --- DYNAMIC CONTENT (Stats OR List) --- */}
+                        <div className="relative pt-6 min-h-[180px] flex-1">
+                            {!showProfileList ? (
+                                /* SCENARIO 1: MAGIC BADGES (Enlarged) */
+                                <div className="animate-in fade-in zoom-in-95 duration-300 h-full flex flex-col">
+
+
+
+
+                                    {/* TAKE TEST BUTTON */}
+                                    <button
+                                        onClick={() => handleStartAssessment('ASSESSMENT', 0)}
+                                        className="mt-3 w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold shadow-md hover:shadow-lg hover:from-blue-700 hover:to-indigo-700 transition-all flex items-center justify-center gap-2 group shrink-0"
+                                    >
+                                        <div className="bg-white/20 p-1 rounded-full group-hover:scale-110 transition-transform">
+                                            <PlusIcon size={16} className="text-white" />
+                                        </div>
+                                        Take New Test
+                                    </button>
+
+                                    {/* CHILD MANAGEMENT BUTTONS - Hidden for Students */}
+                                    {!(user?.email?.endsWith('@lgs.com') && user?.email?.toUpperCase().startsWith('S')) && (
+                                        <div className="grid grid-cols-2 gap-2 mt-3">
+                                            <button
+                                                onClick={() => setShowProfileList(!showProfileList)}
+                                                className="py-2 px-3 rounded-lg bg-slate-100 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600 transition-all flex items-center justify-center gap-2 text-sm font-semibold group"
+                                            >
+                                                <Users size={16} className="group-hover:scale-110 transition-transform" />
+                                                Switch Learner
+                                            </button>
+                                            <button
+                                                onClick={handleOpenAddChild}
+                                                className="py-2 px-3 rounded-lg bg-slate-100 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600 transition-all flex items-center justify-center gap-2 text-sm font-semibold group"
+                                            >
+                                                <PlusIcon size={16} className="group-hover:scale-110 transition-transform" />
+                                                Add Learner
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* PUZZLE OF THE DAY Card */}
+                                    <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+                                        <div className="h-[160px] w-full">
+                                            <PuzzleCard user={user} activeChild={activeChild} activeChildId={activeChildId} />
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                /* SCENARIO 2: PROFILE LIST (Optimized) */
+                                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 h-full flex flex-col">
+                                    <div className="flex items-center justify-between mb-4 px-1">
+                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Select Learner</p>
+                                    </div>
+
+                                    <div className="max-h-[350px] overflow-y-auto pr-1 custom-scrollbar flex flex-col gap-2 flex-1">
+                                        <style jsx global>{`
+                                            .custom-scrollbar::-webkit-scrollbar { width: 3px; }
+                                            .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                                            .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+                                        `}</style>
+
+                                        {/* 1. Add New Learner */}
+                                        <button
+                                            onClick={handleOpenAddChild}
+                                            className="w-full p-3 rounded-xl border-2 border-dashed border-blue-200 dark:border-blue-800/50 bg-blue-50/50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 hover:bg-blue-50 hover:border-blue-400 flex items-center justify-center gap-2 text-xs font-bold transition-all shadow-sm group mb-1 shrink-0"
+                                        >
+                                            <div className="bg-blue-100 dark:bg-blue-900 p-0.5 rounded-full group-hover:scale-110 transition-transform">
+                                                <PlusIcon size={14} />
+                                            </div>
+                                            <span className="text-sm">Add New Learner</span>
+                                        </button>
+
+                                        {/* 2. Existing Profiles */}
+                                        {children && Object.entries(children)
+                                            .sort(([, a], [, b]) => a.name.localeCompare(b.name))
+                                            .filter(([id]) => id !== activeChildId)
+                                            .map(([id, child]) => (
+                                                <div
+                                                    key={id}
+                                                    onClick={() => {
+                                                        handleChildChange({ target: { value: id } });
+                                                        setShowProfileList(false);
+                                                    }}
+                                                    className="w-full p-2.5 rounded-xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-blue-300 hover:shadow-md hover:translate-x-1 cursor-pointer flex items-center gap-3 transition-all duration-200 group shrink-0"
+                                                >
+                                                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 font-bold text-sm group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors shrink-0">
+                                                        {(child.name || "?").charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="text-sm font-bold text-slate-700 dark:text-slate-300 leading-none mb-1 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">{child.name}</p>
+                                                        <p className="text-[10px] text-slate-400 font-medium">{child.grade}</p>
+                                                    </div>
+                                                    <ChevronRight size={14} className="text-slate-300 group-hover:text-blue-400 transition-colors shrink-0" />
+                                                </div>
+                                            ))
+                                        }
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Sign Out - Footer (Grey to Red) */}
+                        <button
+                            onClick={handleLogout}
+                            className="w-full mt-6 py-2.5 px-4 rounded-xl bg-slate-100 dark:bg-slate-700/50 text-slate-500 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20 border border-transparent hover:border-red-100 dark:hover:border-red-900/30 transition-all duration-200 text-xs font-bold flex items-center justify-center gap-2 group"
+                        >
+                            <LogOut size={14} className="group-hover:stroke-red-500 transition-colors" />
+                            Sign Out
+                        </button>
+                    </div>
+                </section>
+
+                {/* Reports Section */}
+                <section className={Styles.reportsSection}>
+                    <h2><strong>Dashboard</strong></h2>
+
+                    {fetchingReports && !reports ? (
+                        <div className={Styles.loader}>
+                            <CircularProgress size={24} />
+                            <div className={Styles.loaderText}>Loading report...</div>
+                        </div>
+                    ) : reports ? (
+                        <div className="flex flex-col gap-8">
+                            {(() => {
+                                let rapidMathReports = [];
+                                let assessmentReports = [];
+                                let neetReports = [];
+
+                                // 1. Collect all reports and split by type
+                                let allReports = [];
+
+                                if (reports.summary) {
+                                    // Extract top-level report only, avoiding nested report nodes
+                                    const { summary, topicFeedback, perQuestionReport, timestamp, type } = reports;
+                                    allReports.push({ id: 'legacy_root', summary, topicFeedback, perQuestionReport, timestamp, type });
+                                }
+
+                                Object.entries(reports).forEach(([key, val]) => {
+                                    if (key !== 'summary' && val && typeof val === 'object' && val.summary) {
+                                        allReports.push({ id: key, ...val });
+                                    }
+                                });
+
+                                // console.log(allReports);
+                                // 2. Sort all reports first
+                                console.log("[DashboardClient] Total reports collected before sort:", allReports.length);
+                                allReports.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+
+                                // 3. Deduplicate using IDs and filter invalid reports
+                                const seenIds = new Set();
+                                const uniqueReports = [];
+                                allReports.forEach(report => {
+                                    // Skip reports with invalid/missing data
+                                    if (!report.summary || !report.summary.totalQuestions) return;
+
+                                    // Use ID for deduplication, fallback to timestamp
+                                    const identifier = report.id || new Date(report.timestamp).getTime();
+                                    if (!seenIds.has(identifier)) {
+                                        seenIds.add(identifier);
+                                        uniqueReports.push(report);
+                                    }
+                                });
+
+                                // 4. Separate
+                                console.log("[DashboardClient] Unique reports count:", uniqueReports.length);
+                                uniqueReports.forEach(report => {
+                                    if (report.type === 'RAPID_MATH') {
+                                        rapidMathReports.push(report);
+                                    } else if (report.type === 'NEET' || (report.summary?.grade && report.summary.grade.startsWith('NEET'))) {
+                                        neetReports.push(report);
+                                    } else {
+                                        assessmentReports.push(report);
+                                    }
+                                });
+                                console.log("[DashboardClient] NEET reports segregated:", neetReports.length);
+
+                                const handleAssessmentClick = (data) => {
+                                    if (data && data.id) {
+                                        navigate(`/quiz/quiz-result?reportId=${data.id}`);
+                                    }
+                                };
+
+                                const handleRapidMathClick = (data) => {
+                                    if (data && data.id) {
+                                        navigate(`/rapid-math/test/summary?reportId=${data.id}`);
+                                    }
+                                };
+
+                                return (
+                                    <div className="animate-fade-in">
+                                        {/* Report Tabs - Modern Style */}
+                                        <div className="mb-6 border-b border-slate-200 dark:border-slate-700">
+                                            <Tabs
+                                                value={activeTab}
+                                                onChange={handleTabChange}
+                                                aria-label="report tabs"
+                                                sx={{
+                                                    '& .MuiTab-root': {
+                                                        textTransform: 'none',
+                                                        fontSize: '1rem',
+                                                        fontWeight: 600,
+                                                        color: '#64748b',
+                                                        minHeight: '48px',
+                                                        '&.Mui-selected': { color: '#2563eb' }
+                                                    },
+                                                    '& .MuiTabs-indicator': { backgroundColor: '#2563eb', height: 3, borderRadius: '3px 3px 0 0' }
+                                                }}
+                                            >
+                                                <Tab label="Skill Assessments" />
+                                                <Tab label="Rapid Math" />
+                                                <Tab label="Neet Exam" />
+                                            </Tabs>
+                                        </div>
+
+                                        {/* CONTENT AREA - SIDE BY SIDE LAYOUT */}
+                                        {/* Grid: 2 Cols for Chart (66%), 1 Col for History (33%) */}
+                                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+
+                                            {/* LEFT COLUMN: CHART */}
+                                            <div className="lg:col-span-2">
+                                                {activeTab === 0 && assessmentReports.length > 0 && (
+                                                    <ProgressChart
+                                                        data={assessmentReports}
+                                                        type="ASSESSMENT"
+                                                        onPointClick={handleAssessmentClick}
+                                                    />
+                                                )}
+                                                {activeTab === 1 && rapidMathReports.length > 0 && (
+                                                    <ProgressChart
+                                                        data={rapidMathReports}
+                                                        type="RAPID_MATH"
+                                                        onPointClick={handleRapidMathClick}
+                                                    />
+                                                )}
+                                                {activeTab === 2 && neetReports.length > 0 && (
+                                                    <ProgressChart
+                                                        data={neetReports}
+                                                        type="NEET"
+                                                        onPointClick={handleAssessmentClick}
+                                                    />
+                                                )}
+
+                                                {/* Empty States for Chart Area */}
+                                                {activeTab === 0 && assessmentReports.length === 0 && (
+                                                    <div className={Styles.emptyState}>
+                                                        <div className={Styles.emptyIcon}>
+                                                            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                                <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" />
+                                                                <circle cx="17" cy="20" r="2" fill="currentColor" />
+                                                                <circle cx="31" cy="20" r="2" fill="currentColor" />
+                                                                <path d="M16 30C18 34 22 36 24 36C26 36 30 34 32 30" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                                            </svg>
+                                                        </div>
+                                                        <p className={Styles.emptyText}>You haven't taken any assessments yet.</p>
+                                                        <button
+                                                            className={Styles.emptyButton}
+                                                            onClick={() => handleStartAssessment('ASSESSMENT', 0)}
+                                                        >
+                                                            Start Assessment
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {activeTab === 1 && rapidMathReports.length === 0 && (
+                                                    <div className={Styles.emptyState}>
+                                                        <div className={Styles.emptyIcon}>
+                                                            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                                <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" />
+                                                                <circle cx="17" cy="20" r="2" fill="currentColor" />
+                                                                <circle cx="31" cy="20" r="2" fill="currentColor" />
+                                                                <path d="M16 30C18 34 22 36 24 36C26 36 30 34 32 30" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                                            </svg>
+                                                        </div>
+                                                        <p className={Styles.emptyText}>No Rapid Math challenges yet.</p>
+                                                        <button
+                                                            className={Styles.emptyButton}
+                                                            onClick={() => navigate("/rapid-math")}
+                                                        >
+                                                            Start Challenge
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {activeTab === 2 && neetReports.length === 0 && (
+                                                    <div className={Styles.emptyState}>
+                                                        <div className={Styles.emptyIcon}>
+                                                            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                                <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" />
+                                                                <circle cx="17" cy="20" r="2" fill="currentColor" />
+                                                                <circle cx="31" cy="20" r="2" fill="currentColor" />
+                                                                <path d="M16 30C18 34 22 36 24 36C26 36 30 34 32 30" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                                            </svg>
+                                                        </div>
+                                                        <p className={Styles.emptyText}>You haven't taken any NEET exams yet.</p>
+                                                        <button
+                                                            className={Styles.emptyButton}
+                                                            onClick={() => navigate("/neet")}
+                                                        >
+                                                            Explore NEET Exam
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* RIGHT COLUMN: HISTORY LIST */}
+                                            {/* Scrollable Container to match Chart Height approx 440px */}
+                                            <div className="lg:col-span-1">
+                                                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col h-[440px]">
+
+                                                    <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex justify-between items-center">
+                                                        <h3 className="font-bold text-slate-800 dark:text-slate-200">Assessment History</h3>
+                                                        {/* View All Toggle */}
+                                                        {(activeTab === 0 ? assessmentReports : activeTab === 1 ? rapidMathReports : neetReports).length > 5 && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (activeTab === 0) setShowAllAssessments(!showAllAssessments);
+                                                                    else if (activeTab === 1) setShowAllRapidMath(!showAllRapidMath);
+                                                                    else if (activeTab === 2) setShowAllNeet(!showAllNeet);
+                                                                }}
+                                                                className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+                                                            >
+                                                                {(activeTab === 0 ? showAllAssessments : activeTab === 1 ? showAllRapidMath : activeTab === 2 ? showAllNeet : false) ? "Collapse" : "View All"}
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="overflow-y-auto flex-1 p-2 space-y-2">
+                                                        {(activeTab === 0 ? assessmentReports : activeTab === 1 ? rapidMathReports : neetReports).length > 0 ? (
+                                                            (activeTab === 0 ? assessmentReports : activeTab === 1 ? rapidMathReports : neetReports)
+                                                                .slice(0, (activeTab === 0 ? showAllAssessments : activeTab === 1 ? showAllRapidMath : activeTab === 2 ? showAllNeet : false) ? undefined : 20) // Show more by default in scroll view
+                                                                .map((report, index) => (
+                                                                    <div
+                                                                        key={report.id || index}
+                                                                        className="group flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 border border-transparent hover:border-slate-200 transition-all cursor-pointer"
+                                                                        onClick={() => {
+                                                                            if (activeTab === 1) {
+                                                                                router.push(`/rapid-math/test/summary?reportId=${report.id}`);
+                                                                            } else {
+                                                                                router.push(`/quiz/quiz-result?reportId=${report.id}`);
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${activeTab === 0 ? 'bg-blue-100 text-blue-600' : activeTab === 2 ? 'bg-purple-100 text-purple-600' : 'bg-amber-100 text-amber-600'} group-hover:scale-105 transition-transform`}>
+                                                                                {activeTab === 0 ? <Award size={20} /> : activeTab === 2 ? <Dna size={20} /> : <Zap size={20} />}
+                                                                            </div>
+                                                                            <div>
+                                                                                <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-1">
+                                                                                    {activeTab === 0 ? `Proficiency Test ${assessmentReports.length - index}` : activeTab === 2 ? `NEET ${report.summary?.grade?.split(' ')[1] || 'Exam'}` : "Rapid Math"}
+                                                                                </h4>
+                                                                                <p className="text-[11px] font-medium text-slate-500">
+                                                                                    {new Date(report.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} • {new Date(report.timestamp).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="text-right">
+                                                                            <div className={`text-sm font-bold ${activeTab === 0 ? 'text-blue-600' : activeTab === 2 ? 'text-purple-600' : 'text-amber-600'}`}>
+                                                                                {Math.round(report.summary.accuracyPercent)}%
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                ))
+                                                        ) : (
+                                                            <div className="flex flex-col items-center justify-center h-full text-slate-400 p-8 text-center opacity-60">
+                                                                <div className="mb-2"><Clock size={32} /></div>
+                                                                <span className="text-sm">No recent activity</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div >
+                    ) : (
+                        <div className={Styles.emptyState}>
+                            <div className={Styles.emptyIcon}>
+                                <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" />
+                                    <circle cx="17" cy="20" r="2" fill="currentColor" />
+                                    <circle cx="31" cy="20" r="2" fill="currentColor" />
+                                    <path d="M16 30C18 34 22 36 24 36C26 36 30 34 32 30" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                </svg>
+                            </div>
+                            <p className={Styles.emptyText}>You haven't taken the assessment yet.</p>
+                            <button
+                                className={Styles.emptyButton}
+                                onClick={() => handleStartAssessment('ASSESSMENT', 0)}
+                            >
+                                Start Assessment
+                            </button>
+                        </div>
+                    )}
+                </section>
+            </div >
+
+            <Footer />
+
+            <Dialog
+                open={addChildOpen}
+                onClose={() => setAddChildOpen(false)}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>Add Learner Profile</DialogTitle>
+                <DialogContent>
+                    <div className={Styles.addChildForm}>
+                        <div className={Styles.inputGroup}>
+                            <User className={Styles.inputIcon} size={20} />
+                            <TextField
+                                fullWidth
+                                placeholder="Enter full name"
+                                variant="outlined"
+                                margin="none"
+                                value={childForm.name}
+                                onChange={(e) => setChildForm({ ...childForm, name: e.target.value })}
+                                className={Styles.textField}
+                            />
+                        </div>
+
+                        <div className={Styles.gradeSection}>
+                            <label className={Styles.gradeLabel}>Which grade is the student in?</label>
+                            <FormControl fullWidth className={Styles.gradeSelect}>
+                                <Select
+                                    value={childForm.grade}
+                                    displayEmpty
+                                    onChange={(e) => setChildForm({ ...childForm, grade: e.target.value })}
+                                    renderValue={(selected) => {
+                                        if (!selected) {
+                                            return <span style={{ color: '#9ca3af' }}>Select Grade</span>;
+                                        }
+                                        return selected;
+                                    }}
+                                >
+                                    <MenuItem disabled value="">
+                                        <em>Select Grade</em>
+                                    </MenuItem>
+                                    {[...Array(12)].map((_, i) => (
+                                        <MenuItem key={i + 1} value={`Grade ${i + 1}`}>
+                                            Grade {i + 1}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                        </div>
+
+                        <Button
+                            variant="contained"
+                            onClick={handleSaveChild}
+                            disabled={!childForm.name || !childForm.grade}
+                            className={Styles.actionButton}
+                        >
+                            Save Child
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Child Dialog */}
+            <Dialog
+                open={editChildOpen}
+                onClose={() => setEditChildOpen(false)}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>Edit Child Profile</DialogTitle>
+                <DialogContent>
+                    <div className={Styles.addChildForm}>
+                        <div className={Styles.inputGroup}>
+                            <User className={Styles.inputIcon} size={20} />
+                            <TextField
+                                fullWidth
+                                placeholder="Enter full name"
+                                variant="outlined"
+                                margin="none"
+                                value={childForm.name}
+                                onChange={(e) => setChildForm({ ...childForm, name: e.target.value })}
+                                className={Styles.textField}
+                            />
+                        </div>
+
+                        <div className={Styles.gradeSection}>
+                            <label className={Styles.gradeLabel}>Which grade is the student in?</label>
+                            <FormControl fullWidth className={Styles.gradeSelect}>
+                                <Select
+                                    value={childForm.grade}
+                                    displayEmpty
+                                    onChange={(e) => setChildForm({ ...childForm, grade: e.target.value })}
+                                    renderValue={(selected) => {
+                                        if (!selected) {
+                                            return <span style={{ color: '#9ca3af' }}>Select Grade</span>;
+                                        }
+                                        return selected;
+                                    }}
+                                >
+                                    <MenuItem disabled value="">
+                                        <em>Select Grade</em>
+                                    </MenuItem>
+                                    {[...Array(12)].map((_, i) => (
+                                        <MenuItem key={i + 1} value={`Grade ${i + 1}`}>
+                                            Grade {i + 1}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                        </div>
+
+                        <Button
+                            variant="contained"
+                            onClick={handleUpdateChild}
+                            disabled={!childForm.name || !childForm.grade}
+                            className={Styles.actionButton}
+                        >
+                            Save Changes
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </div >
+    );
+};
+
+export default DashboardClient;

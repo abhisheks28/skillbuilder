@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback, Suspense } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
-import { Timer } from "@/components/RapidMath/timer"
-import { QuestionCard } from "@/components/RapidMath/question-card"
+import { Timer } from "@/features/rapid-math/components/timer"
+import { QuestionCard } from "@/features/rapid-math/components/question-card"
 import { Loader2 } from "lucide-react"
 import Header from "@/pages/homepage/Header"
 

@@ -3,8 +3,8 @@ import { useState } from "react";
 import Styles from "./Footer.module.css";
 import { Facebook, Twitter, Linkedin, Instagram, Youtube, Mail, Phone, MapPin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import AuthModal from "../Auth/AuthModal.component";
-import { useAuth } from "@/context/AuthContext";
+import AuthModal from "@/features/auth/components/AuthModal.component";
+import { useAuth } from "@/features/auth/context/AuthContext";
 
 const Footer = () => {
     const navigate = useNavigate();

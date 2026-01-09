@@ -4,11 +4,11 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, User, X, Menu } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, IconButton, Select, MenuItem, FormControl, InputLabel } from "@mui/material";
 import { useState, useEffect, useContext, useRef } from "react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/features/auth/context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
-import { QuizSessionContext } from "@/context/QuizSessionContext";
+import { QuizSessionContext } from "@/features/quiz/context/QuizSessionContext";
 import { getUserDatabaseKey } from "@/utils/authUtils";
-import AuthModal from "@/components/Auth/AuthModal.component";
+import AuthModal from "@/features/auth/components/AuthModal.component";
 import Tooltip from "@mui/material/Tooltip";
 
 const Header = () => {

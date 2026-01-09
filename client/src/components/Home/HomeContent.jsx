@@ -9,12 +9,12 @@ import SampleDashboard from "@/components/SampleDashboard/SampleDashboard.compon
 import Footer from "@/components/Footer/Footer.component";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useContext, useState, useEffect } from "react";
-import { QuizSessionContext } from "@/context/QuizSessionContext";
+import { QuizSessionContext } from "@/features/quiz/context/QuizSessionContext";
 import { toast } from "react-toastify";
 import SuccessStories from "@/components/SuccessStories/SuccessStories.component";
 import MathClub from "@/components/Home/MathClub.component";
-import AuthModal from "@/components/Auth/AuthModal.component";
-import { useAuth } from "@/context/AuthContext";
+import AuthModal from "@/features/auth/components/AuthModal.component";
+import { useAuth } from "@/features/auth/context/AuthContext";
 import CustomModal from "@/components/CustomModal/CustomModal.component";
 // import { get, ref } from "firebase/database";
 
@@ -25,7 +25,7 @@ import { getUserDatabaseKey } from "@/utils/authUtils";
 import confetti from "canvas-confetti";
 import Curtain from "@/components/Launch/Curtain";
 import Balloons from "@/components/Launch/Balloons";
-import FloatingLottery from "@/components/Lottery/FloatingLottery.component";
+import FloatingLottery from "@/features/lottery/components/FloatingLottery.component";
 
 
 const HomeContent = () => {

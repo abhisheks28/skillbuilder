@@ -13,9 +13,9 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
-import { useAuth } from "@/context/AuthContext"
+import { useAuth } from "@/features/auth/context/AuthContext"
 // Firebase auth removed - using AuthContext instead
-import { SpeedTestLeaderboard } from "@/components/RapidMath/SpeedTest/SpeedTestLeaderboard"
+import { SpeedTestLeaderboard } from "@/features/rapid-math/components/SpeedTest/SpeedTestLeaderboard"
 
 export default function RapidMath() {
     const navigate = useNavigate()
