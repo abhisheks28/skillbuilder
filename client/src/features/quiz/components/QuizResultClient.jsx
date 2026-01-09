@@ -398,15 +398,17 @@ const QuizResultClient = () => {
     const statusCounts = perQuestionReport.reduce((acc, q) => {
         const score = q.score !== undefined ? q.score : (q.isCorrect ? 1 : 0);
         const isCorrect = score === 1;
+        const isPartial = score > 0 && score < 1;
         const isWrong = score === 0 && q.attempted;
         const isSkipped = !q.attempted;
 
         acc.All++;
         if (isCorrect) acc.Correct++;
+        if (isPartial) acc.Partial++;
         if (isWrong) acc.Wrong++;
         if (isSkipped) acc.Skipped++;
         return acc;
-    }, { All: 0, Correct: 0, Wrong: 0, Skipped: 0 });
+    }, { All: 0, Correct: 0, Partial: 0, Wrong: 0, Skipped: 0 });
 
     const filteredQuestions = perQuestionReport.filter(q => {
         // Filter by Category
@@ -415,10 +417,12 @@ const QuizResultClient = () => {
         // Filter by Status
         const score = q.score !== undefined ? q.score : (q.isCorrect ? 1 : 0);
         const isCorrect = score === 1;
+        const isPartial = score > 0 && score < 1;
         const isWrong = score === 0 && q.attempted;
         const isSkipped = !q.attempted;
 
         if (filterStatus === "Correct" && !isCorrect) return false;
+        if (filterStatus === "Partial" && !isPartial) return false;
         if (filterStatus === "Wrong" && !isWrong) return false;
         if (filterStatus === "Skipped" && !isSkipped) return false;
 
@@ -1555,6 +1559,7 @@ const QuizResultClient = () => {
                             {[
                                 { id: 'All', label: 'All', icon: null, color: '#64748b', bg: '#f1f5f9' },
                                 { id: 'Correct', label: 'Correct', icon: <CheckCircle size={14} />, color: '#16a34a', bg: '#dcfce7' },
+                                { id: 'Partial', label: 'Partial', icon: <AlertCircle size={14} />, color: '#d97706', bg: '#fff7ed' },
                                 { id: 'Wrong', label: 'Wrong', icon: <XCircle size={14} />, color: '#dc2626', bg: '#fee2e2' },
                                 { id: 'Skipped', label: 'Skipped', icon: <HelpCircle size={14} />, color: '#d97706', bg: '#fef3c7' }
                             ].map(status => {

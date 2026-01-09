@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Body, Response
+from fastapi import APIRouter, HTTPException, Depends, Body, Response, Request
 from app.core.database import get_db_pool
 from app.core.security import verify_password, get_password_hash, create_access_token
 from typing import Dict, Any
@@ -75,9 +75,17 @@ async def register(request: UserRegisterRequest):
                         child_name = child.get('name')
                         child_grade = child.get('grade')
                         if child_name and child_grade:
+                             # Create User for Child first
+                             child_uid = str(uuid.uuid4())
+                             child_user_id = await conn.fetchval(
+                                 "INSERT INTO users (name, role, firebase_uid) VALUES ($1, $2, $3) RETURNING user_id",
+                                 child_name, 'student', child_uid
+                             )
+                             
+                             # Insert Student linked to Parent
                              await conn.execute(
-                                 "INSERT INTO students (parent_id, name, grade, parent_name) VALUES ($1, $2, $3, $4)",
-                                 parent_id, child_name, child_grade, name
+                                 "INSERT INTO students (user_id, parent_id, grade, parent_name) VALUES ($1, $2, $3, $4)",
+                                 child_user_id, parent_id, child_grade, name
                              )
             elif role == 'guest':
                  await conn.execute(
@@ -226,3 +234,9 @@ async def admin_login(request: AdminLoginRequest, response: Response = None):
 async def logout(response: Response):
     response.delete_cookie(key="admin_session")
     return {"success": True, "message": "Logged out"}
+
+@router.get("/admin-verify")
+async def admin_verify(request: Request):
+    if request.cookies.get("admin_session") == "true":
+        return {"success": True, "message": "Authenticated"}
+    raise HTTPException(status_code=401, detail="Not authenticated")

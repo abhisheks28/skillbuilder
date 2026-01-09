@@ -71,7 +71,7 @@ export default function AdminLoginClient() {
             });
 
             if (response.ok) {
-                navigate('/admin-dashboard');
+                navigate('/admin-dashboard', { replace: true });
             } else {
                 const data = await response.json();
                 setError(data.message || 'Invalid credentials');

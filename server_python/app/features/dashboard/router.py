@@ -220,10 +220,14 @@ async def get_admin_students(skip: int = 0, limit: int = 50):
             SELECT s.*, u.created_at, u.firebase_uid, u.role, u.name as user_name, 
                    COALESCE(s.phone_number, p.phone_number) as resolved_phone,
                    p.email_id as parent_email,
-                   p.user_id as parent_user_id
+                   p.user_id as parent_user_id,
+                   sc.username as student_ticket,
+                   pc.username as parent_ticket
             FROM students s
             JOIN users u ON s.user_id = u.user_id
             LEFT JOIN parents p ON s.parent_id = p.parent_id
+            LEFT JOIN credentials sc ON s.user_id = sc.user_id
+            LEFT JOIN credentials pc ON p.user_id = pc.user_id
             ORDER BY u.created_at DESC
             OFFSET $1 LIMIT $2
         """, skip, limit)
@@ -387,8 +391,15 @@ async def get_admin_students(skip: int = 0, limit: int = 50):
             else:
                 auth_provider = 'Google'
             
+            # ID Selection Priority: 
+            # 1. Student's Ticket (Direct)
+            # 2. Parent's Ticket (Managed)
+            # 3. Firebase UID (Google)
+            # 4. Fallback User ID
+            display_id = r['student_ticket'] or r['parent_ticket'] or r['firebase_uid'] or str(r['user_id'])
+
             students.append({
-                "id": r['firebase_uid'] or str(r['user_id']),
+                "id": display_id,
                 "name": r['user_name'] or r.get('name', 'Unknown'), # Prefer user name from join
                 "childId": str(r['student_id']),
                 "grade": r['grade'],
