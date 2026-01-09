@@ -263,10 +263,7 @@ const TeacherManagement = () => {
     };
 
     const handleSaveStudents = async () => {
-        // Fallback to direct auth check if context is slow/missing
-        // Since Admin Dashboard uses cookies, client-side Firebase Auth might be null.
-        // We allow the operation to proceed with a placeholder ID if DB rules allow it.
-        const currentUser = user || auth.currentUser;
+        const currentUser = user;
         const adminUid = currentUser?.uid || 'admin';
 
         console.log('Save Students Clicked', { selectedTeacher, currentUser, adminUid, grades: selectedGradesForStudents });

@@ -16,6 +16,7 @@ import AdminLoginClient from "@/features/auth/components/AdminLogin/AdminLoginCl
 import DashboardClient from "@/features/dashboard/components/DashboardClient";
 import TeacherDashboard from "@/features/dashboard/components/TeacherDashboard";
 import TeacherStudentView from "@/features/dashboard/components/TeacherStudentView";
+import NeetUploadClient from "@/features/neet/components/NeetUploadClient";
 import LotteryPage from "@/features/lottery/components/LotteryPage.component";
 import NeetClient from "@/features/neet/components/NeetClient";
 import PracticeClient from "@/features/practice/components/PracticeClient";
@@ -67,6 +68,7 @@ function App() {
                             <Route path="/admin-dashboard" element={<AdminDashboard />} />
                             <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
                             <Route path="/teacher-dashboard/student/:uid" element={<TeacherStudentView />} />
+                            <Route path="/teacher-dashboard/neet-upload" element={<NeetUploadClient />} />
                             <Route path="/tutor-bookings" element={<TutorBookingsClient />} />
 
                             {/* Quiz Routes */}

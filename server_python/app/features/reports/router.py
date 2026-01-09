@@ -81,11 +81,14 @@ async def get_reports(uid: Optional[str] = None, childId: Optional[str] = None, 
             # We want reports for this child specifically.
             # Either direct on their ID, or on parent's ID tagged with their childId.
             # Also need to handle string/int types for JSON matching if needed, but usually string in JSON.
+            # Enforce filtering by childId in the JSON for both potential owners
             query = """
                 SELECT * FROM reports 
-                WHERE (user_id = $1)
-                OR (user_id = $2 AND report_json->>'childId' = $3)
+                WHERE (user_id = $1 OR user_id = $2)
+                AND report_json->>'childId' = $3
             """
+            # Validating if $2 (parent_user_id) is None is handled by Postgres (false) or Python logic
+            # usage of OR with None is safe in SQL: (col = NULL) is null (falsy)
             rows = await conn.fetch(query, user_id, parent_user_id, childId)
         else:
             query = "SELECT * FROM reports WHERE user_id = $1"

@@ -335,3 +335,34 @@ async def reset_teacher(uid: str):
              await conn.execute("UPDATE students SET mentor_id = NULL WHERE mentor_id = $1", t_id)
              
     return {"success": True}
+
+@router.put("/{uid}/permissions")
+async def update_permissions(uid: str, permissions: Dict[str, Any] = Body(...)):
+    """
+    Update teacher permissions (e.g., NEET Upload).
+    Payload: { "neetUploadEnabled": true, "adminUid": "..." }
+    """
+    neet_enabled = permissions.get("neetUploadEnabled", False)
+    
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        teacher = await conn.fetchrow("""
+            SELECT t.teacher_id FROM teachers t
+            JOIN users u ON t.user_id = u.user_id
+            WHERE u.firebase_uid = $1
+        """, uid)
+        
+        if not teacher:
+            raise HTTPException(status_code=404, detail="Teacher not found")
+            
+        t_id = teacher['teacher_id']
+        
+        # Ensure teaching record exists
+        await conn.execute("""
+            INSERT INTO teaching (teacher_id) VALUES ($1) ON CONFLICT DO NOTHING
+        """, t_id)
+        
+        # Update NEET permission
+        await conn.execute("UPDATE teaching SET neet = $1 WHERE teacher_id = $2", neet_enabled, t_id)
+        
+    return {"success": True}

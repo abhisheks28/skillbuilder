@@ -476,8 +476,17 @@ const DashboardClient = () => {
             // editingChildId should be the Student ID (numeric string)
             // If it is a legacy firebase key (child_...) it might fail in backend unless handled.
             // But we assume fresh data from API uses numeric IDs.
-            const response = await fetch(`/api/users/${uid}/child/${editingChildId}`, {
-                method: 'PUT',
+            // Determine endpoint based on user role
+            // Students update their own profile; Parents update their child
+            const isStudent = userData?.userType === 'student';
+            const endpoint = isStudent
+                ? `/api/users/${uid}`
+                : `/api/users/${uid}/child/${editingChildId}`;
+
+            const method = isStudent ? 'PUT' : 'PUT'; // Both are PUT
+
+            const response = await fetch(endpoint, {
+                method: method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(updates)
             });
@@ -946,9 +955,9 @@ const DashboardClient = () => {
                                                                         className="group flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 border border-transparent hover:border-slate-200 transition-all cursor-pointer"
                                                                         onClick={() => {
                                                                             if (activeTab === 1) {
-                                                                                router.push(`/rapid-math/test/summary?reportId=${report.id}`);
+                                                                                navigate(`/rapid-math/test/summary?reportId=${report.id}`);
                                                                             } else {
-                                                                                router.push(`/quiz/quiz-result?reportId=${report.id}`);
+                                                                                navigate(`/quiz/quiz-result?reportId=${report.id}`);
                                                                             }
                                                                         }}
                                                                     >

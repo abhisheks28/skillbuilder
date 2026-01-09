@@ -9,8 +9,20 @@ router = APIRouter()
 async def delete_user(uid: str):
     pool = await get_db_pool()
     async with pool.acquire() as conn:
-        # Check if user exists
+        # Check if user exists by various identifiers
+        # 1. Check by Firebase UID
         user = await conn.fetchrow("SELECT user_id FROM users WHERE firebase_uid = $1", uid)
+        
+        # 2. Check by Credentials Username (Ticket ID)
+        if not user:
+            user = await conn.fetchrow(
+                "SELECT user_id FROM credentials WHERE username = $1", uid
+            )
+            
+        # 3. Check by direct User ID (if numeric)
+        if not user and uid.isdigit():
+             user = await conn.fetchrow("SELECT user_id FROM users WHERE user_id = $1", int(uid))
+             
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
             
@@ -60,8 +72,15 @@ async def get_profile(uid: str = Path(..., description="Firebase UID")):
                 children_data[str(role_row['student_id'])] = child_data
 
         elif role == 'teacher':
-            role_row = await conn.fetchrow("SELECT * FROM teachers WHERE user_id = $1", user_id)
-            if role_row: role_data = dict(role_row)
+            role_row = await conn.fetchrow("""
+                SELECT t.*, teach.neet as neet_enabled 
+                FROM teachers t
+                LEFT JOIN teaching teach ON t.teacher_id = teach.teacher_id
+                WHERE t.user_id = $1
+            """, user_id)
+            if role_row: 
+                role_data = dict(role_row)
+                role_data['neetUploadEnabled'] = role_row['neet_enabled'] or False
 
         elif role == 'parent':
             role_row = await conn.fetchrow("SELECT * FROM parents WHERE user_id = $1", user_id)
