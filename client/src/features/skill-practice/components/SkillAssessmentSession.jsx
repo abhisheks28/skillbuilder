@@ -255,14 +255,18 @@ const SkillAssessmentSession = () => {
         });
 
         try {
-            await completeAssessment(user?.uid, {
+            const payload = {
                 report_id: parseInt(reportId, 10),
                 day_number: dayNumber,
                 category,
                 questions_attempted: questionPaper.length,
                 correct_answers: correctCount,
                 time_taken_seconds: timeSpent
-            });
+            };
+            console.log('[SkillAssessmentSession] Submitting assessment with payload:', payload);
+            console.log('[SkillAssessmentSession] User UID:', user?.uid);
+
+            await completeAssessment(user?.uid, payload);
 
             setResult({
                 correct: correctCount,

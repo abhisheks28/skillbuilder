@@ -29,14 +29,29 @@ export const getDaysProgress = async (reportId, uid) => {
  */
 export const completeAssessment = async (uid, data) => {
     try {
+        // FastAPI expects 'uid' and 'data' as separate body fields
+        // where 'data' contains the DayProgressCreate schema fields
         const response = await fetch('/api/skill-practice/complete-assessment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uid, data })
+            body: JSON.stringify({
+                uid,
+                data: {
+                    report_id: data.report_id,
+                    day_number: data.day_number,
+                    category: data.category,
+                    questions_attempted: data.questions_attempted,
+                    correct_answers: data.correct_answers,
+                    time_taken_seconds: data.time_taken_seconds
+                }
+            })
         });
         if (response.ok) {
             return await response.json();
         }
+        // Get error details from response
+        const errorData = await response.json().catch(() => ({}));
+        console.error('API Error details:', errorData);
         throw new Error(`API Error: ${response.status}`);
     } catch (error) {
         console.error('Error completing assessment:', error);
