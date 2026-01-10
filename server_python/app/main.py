@@ -8,6 +8,8 @@ from app.features.puzzles.router import router as puzzles_router
 from app.features.lottery.router import router as lottery_router
 from app.features.neet.router import router as neet_router
 from app.features.teachers.router import router as teachers_router
+from app.features.learning_plan.router import router as learning_plan_router
+from app.features.practice_generator.router import router as practice_gen_router
 
 from app.core.config import settings
 
@@ -36,6 +38,8 @@ app.include_router(puzzles_router, prefix="/api/puzzles", tags=["Puzzles"])
 app.include_router(lottery_router, prefix="/api/lottery", tags=["Lottery"])
 app.include_router(neet_router, prefix="/api/neet", tags=["NEET"])
 app.include_router(teachers_router, prefix="/api/teachers", tags=["Teachers"])
+app.include_router(learning_plan_router, prefix="/api/learning-plan", tags=["Learning Plan"])
+app.include_router(practice_gen_router, prefix="/api/practice", tags=["Practice Generator"])
 
 @app.get("/")
 async def root():

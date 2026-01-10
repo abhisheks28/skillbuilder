@@ -1,10 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
-// import Styles from "./Grade1PracticeClient.module.css"; // We need to handle styles. Can re-use existing or genericize.
-// Let's assume we rename Grade1PracticeClient.module.css to PracticeSession.module.css or similar? 
-// For now, I'll copy the styles too or point to the old one if I don't delete it yet?
-// Planner said delete Grade1 dir. So I should move the CSS too.
-import { useContext } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import Styles from "./PracticeSession.module.css";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -12,10 +7,10 @@ import PracticeMCQ from "./PracticeMCQ.component";
 import PracticeUserInput from "./PracticeUserInput.component";
 import PracticeTableInput from "./PracticeTableInput.component";
 import LoadingScreen from "@/components/LoadingScreen/LoadingScreen.component";
-// import getRandomInt from "../../app/workload/GetRandomInt"; // relative from src/components/Practice
-import getRandomInt from "@/utils/workload/GetRandomInt"; // Use alias for safety
+import getRandomInt from "@/utils/workload/GetRandomInt";
 import QuestionPalette from "@/components/QuestionPalette/QuestionPalette.component";
 import { regenerateQuestion } from "./PracticeGeneratorHelper";
+import { validateFractionValue } from "./fractionValidator";
 import motivationData from "@/features/quiz/components/Assets/motivation.json";
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -26,7 +21,9 @@ import { getUserDatabaseKey } from "@/utils/authUtils";
 const PracticeSession = ({
     initialQuestions = [],
     generatorMap,
-    gradeTitle = "Practice"
+    gradeTitle = "Practice",
+    mode = "practice", // 'practice' | 'assessment'
+    onAssessmentComplete
 }) => {
     const navigate = useNavigate();
     const { user, userData } = useAuth();
@@ -34,6 +31,8 @@ const PracticeSession = ({
     const [questions, setQuestions] = useState([]);
     const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [assessmentScore, setAssessmentScore] = useState(0);
+    const [assessmentResults, setAssessmentResults] = useState([]);
 
     useEffect(() => {
         if (initialQuestions && initialQuestions.length > 0) {
@@ -42,98 +41,27 @@ const PracticeSession = ({
         }
     }, [initialQuestions]);
 
-    const handleStartAssessment = () => {
-        // Based on DashboardClient logic
-        const effectiveUserData = userData || (typeof window !== "undefined" ? JSON.parse(window.localStorage.getItem("quizSession") || "{}")?.userDetails : null);
-
-        let userKey = null;
-        if (user) {
-            userKey = getUserDatabaseKey(user);
-        }
-        if (!userKey && effectiveUserData) {
-            userKey = effectiveUserData.userKey || effectiveUserData.phoneNumber || effectiveUserData.parentPhone || effectiveUserData.parentEmail;
-        }
-
-        if (!userKey) {
-            // If no user detected, just go to complete page or home? 
-            // Defaulting to complete page if auth fails to keep flow, or maybe login?
-            // User requested "redirect them to start take assessment flow". 
-            // If they are not logged in, they can't take assessment.
-            // Let's force /quiz which might handle auth or redirect.
-            navigate("/quiz");
-            return;
-        }
-
-        // Determine active child logic (simplified from Dashboard)
-        // We might not know the active child here easily without reading local storage similarly.
-        let activeChild = null;
-        let activeChildId = null;
-
-        if (effectiveUserData?.children) {
-            // Try to get from local storage
-            const storedChildId = typeof window !== "undefined"
-                ? window.localStorage.getItem(`activeChild_${userKey}`) || window.localStorage.getItem('lastActiveChild')
-                : null;
-
-            if (storedChildId && effectiveUserData.children[storedChildId]) {
-                activeChild = effectiveUserData.children[storedChildId];
-                activeChildId = storedChildId;
-            } else {
-                // Fallback to first
-                const firstKey = Object.keys(effectiveUserData.children)[0];
-                if (firstKey) {
-                    activeChild = effectiveUserData.children[firstKey];
-                    activeChildId = firstKey;
-                }
-            }
-        }
-
-        if (!activeChild) {
-            // Fallback if no child profile structure (e.g. old user model or direct user)
-            // We'll create a dummy wrapper or just pass userDetails if simpler.
-            // But the Quiz flow expects specific structure. 
-            // Let's assume standard flow exists. If not, normal /quiz entry point calls logic too.
-        }
-
-        // Clean previous session
-        try {
-            if (typeof window !== "undefined") {
-                window.localStorage.removeItem("quizSession");
-            }
-        } catch (e) { }
-
-        const userDetails = {
-            ...(activeChild || effectiveUserData), // Fallback to main data if no child
-            phoneNumber: userKey,
-            childId: activeChildId,
-            activeChildId: activeChildId,
-            testType: 'ASSESSMENT'
-        };
-
-        setQuizContext({ userDetails, questionPaper: null });
-        navigate("/quiz");
-    };
-
     const handleNext = () => {
         if (activeQuestionIndex < questions.length - 1) {
             setActiveQuestionIndex(prev => prev + 1);
         } else {
-            // Last question - Go to Home
+            // Last question - Go to Home or Finish
             navigate('/');
         }
     };
 
     const handleJumpToQuestion = (index) => {
+        // In assessment mode, maybe disable jumping forward?
+        // But for now, allow it or let Palette handle disable
         setActiveQuestionIndex(index);
     };
 
     const handleCorrectAnswer = (index) => {
-        // Mark as answered
+        // Used in Practice Mode
         const updatedQuestions = [...questions];
         updatedQuestions[index].userAnswer = "correct";
         setQuestions(updatedQuestions);
 
-        // Show Motivation
         const motivations = motivationData.quiz;
         const randomMotivation = motivations[Math.floor(Math.random() * motivations.length)].motivation;
         toast.success(randomMotivation, {
@@ -145,33 +73,67 @@ const PracticeSession = ({
             draggable: true,
         });
 
-        // Auto-advance after 2 seconds
         setTimeout(() => {
-            // Check if we are still on the same question (user didn't manually move)
             if (activeQuestionIndex === index && index < questions.length - 1) {
                 setActiveQuestionIndex(prev => prev + 1);
             } else if (index === questions.length - 1) {
-                navigate('/practice/complete');
+                navigate('/practice/complete'); // Or callback?
             }
         }, 2500);
     };
 
     const handleWrongAnswer = () => {
-        // No op for palette now
+        // No op
+    };
+
+    const handleAssessmentAnswer = (userAnswer) => {
+        const currentQ = questions[activeQuestionIndex];
+        let isCorrect = false;
+
+        const correctVal = String(currentQ.answer).trim();
+        const checkVal = String(userAnswer).trim();
+
+        if (currentQ.type === 'mcq') {
+            isCorrect = checkVal === correctVal;
+        } else {
+            // User Input
+            isCorrect = checkVal === correctVal || validateFractionValue(checkVal, correctVal);
+        }
+
+        const newResults = [...assessmentResults, { ...currentQ, userAnswer, isCorrect }];
+        setAssessmentResults(newResults);
+
+        let newScore = assessmentScore;
+        if (isCorrect) {
+            newScore += 1;
+            setAssessmentScore(prev => prev + 1);
+        }
+
+        // Move Next
+        if (activeQuestionIndex < questions.length - 1) {
+            setActiveQuestionIndex(prev => prev + 1);
+        } else {
+            // Finish
+            if (onAssessmentComplete) {
+                onAssessmentComplete({
+                    score: newScore,
+                    total: questions.length,
+                    results: newResults
+                });
+            }
+        }
     };
 
     const handleRepeat = (index) => {
-        // Regenerate question at this index
+        if (mode === 'assessment') return;
         const currentQ = questions[index];
-        // Pass generatorMap to the helper
         const newQ = regenerateQuestion(currentQ, generatorMap);
 
         if (newQ) {
             const updatedQuestions = [...questions];
-            updatedQuestions[index] = { ...newQ, userAnswer: null }; // Reset answer
+            updatedQuestions[index] = { ...newQ, userAnswer: null };
             setQuestions(updatedQuestions);
         } else {
-            console.warn("Could not regenerate question", currentQ);
             toast.error("Could not regenerate this question.");
         }
     };
@@ -194,7 +156,7 @@ const PracticeSession = ({
         <div className={Styles.page}>
             <ToastContainer />
             <div className={Styles.mainLayout}>
-                {/* Sidebar Palette */}
+                {/* Sidebar Palette - Hide in Assessment Mode? Or make read only? */}
                 <div className={Styles.paletteColumn}>
                     <div className={Styles.sidebarHeader}>
                         <h2>{gradeTitle}</h2>
@@ -204,20 +166,20 @@ const PracticeSession = ({
                         activeQuestionIndex={activeQuestionIndex}
                         onSelect={handleJumpToQuestion}
                         onPrevious={() => activeQuestionIndex > 0 && setActiveQuestionIndex(activeQuestionIndex - 1)}
-                        onNext={handleNext}
+                        onNext={handleNext} // This might need to be assessment specific if Palette has "Next"
                         isLastQuestion={activeQuestionIndex === questions.length - 1}
-                        nextDisabled={questions[activeQuestionIndex].userAnswer !== "correct"}
+                        nextDisabled={mode === 'assessment' ? false : questions[activeQuestionIndex].userAnswer !== "correct"}
+                    // In assessment, we can move freely? Or blocked until answer?
+                    // Let's assume Palette is just navigation.
                     />
 
                     <button onClick={handleExit} className={Styles.exitButtonSidebar}>
                         <ArrowLeft size={20} />
-                        <span>Exit Practice</span>
+                        <span>Exit {mode === 'assessment' ? 'Assessment' : 'Practice'}</span>
                     </button>
                 </div>
 
-                {/* Question Area */}
                 <div className={Styles.contentArea}>
-
                     <div className={Styles.mobileHeader}>
                         <button onClick={handleExit} className={Styles.backButton}>
                             <ArrowLeft size={24} />
@@ -240,6 +202,8 @@ const PracticeSession = ({
                             onWrong={handleWrongAnswer}
                             onRepeat={() => handleRepeat(activeQuestionIndex)}
                             isLastQuestion={activeQuestionIndex === questions.length - 1}
+                            mode={mode}
+                            onSubmitAnswer={handleAssessmentAnswer}
                         />
                     )}
                     {currentQuestion.type === "userInput" && (
@@ -250,13 +214,15 @@ const PracticeSession = ({
                             topic={currentQuestion.topic}
                             answer={currentQuestion.answer}
                             image={currentQuestion.image}
-                            grade={gradeTitle} // Pass title or raw grade number? Component might use it for keypad?
+                            grade={gradeTitle}
                             keypadMode={currentQuestion.keypadMode}
                             onNext={handleNext}
                             onCorrect={() => handleCorrectAnswer(activeQuestionIndex)}
                             onWrong={handleWrongAnswer}
                             onRepeat={() => handleRepeat(activeQuestionIndex)}
                             isLastQuestion={activeQuestionIndex === questions.length - 1}
+                            mode={mode}
+                            onSubmitAnswer={handleAssessmentAnswer}
                         />
                     )}
                     {currentQuestion.type === "tableInput" && (
@@ -273,6 +239,8 @@ const PracticeSession = ({
                             onWrong={handleWrongAnswer}
                             onRepeat={() => handleRepeat(activeQuestionIndex)}
                             isLastQuestion={activeQuestionIndex === questions.length - 1}
+                            mode={mode} // Passed but might need implementation inside
+                            onSubmitAnswer={handleAssessmentAnswer}
                         />
                     )}
                 </div>

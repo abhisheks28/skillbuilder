@@ -20,6 +20,7 @@ import NeetUploadClient from "@/features/neet/components/NeetUploadClient";
 import LotteryPage from "@/features/lottery/components/LotteryPage.component";
 import NeetClient from "@/features/neet/components/NeetClient";
 import PracticeClient from "@/features/practice/components/PracticeClient";
+import AssessmentModePage from "@/features/practice/pages/AssessmentModePage";
 import QuizClient from "@/features/quiz/components/QuizClient";
 import QuizResultClient from "@/features/quiz/components/QuizResultClient";
 import TutorBookingsClient from "@/features/tutor-bookings/components/TutorBookingsClient";
@@ -56,6 +57,7 @@ function App() {
                             <Route path="/lottery" element={<LotteryPage />} />
                             <Route path="/neet" element={<NeetClient />} />
                             <Route path="/practice" element={<PracticeClient />} />
+                            <Route path="/assessment" element={<AssessmentModePage />} />
 
                             {/* Rapid Math Routes */}
                             <Route path="/rapid-math" element={<RapidMath />} />

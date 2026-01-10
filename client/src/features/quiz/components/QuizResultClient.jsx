@@ -42,7 +42,7 @@ const HeroChart = ({ summary, notAttempted }) => {
 import Header from "@/pages/homepage/Header";
 import MathRenderer from "@/components/MathRenderer/MathRenderer.component";
 import TypeFactorTree from "@/components/QuestionTypes/TypeFactorTree/TypeFactorTree.component";
-import { CheckCircle, XCircle, HelpCircle, Clock, Target, BookOpen, TrendingUp, BarChart3, FileText, X, AlertCircle, Download, ArrowLeft } from "lucide-react";
+import { CheckCircle, XCircle, HelpCircle, Clock, Target, BookOpen, TrendingUp, BarChart3, FileText, X, AlertCircle, Download, ArrowLeft, Play } from "lucide-react";
 import { QuizSessionContext } from "@/features/quiz/context/QuizSessionContext";
 import analyzeResponses from "@/utils/workload/GenerateReport";
 import Footer from "@/components/Footer/Footer.component";
@@ -197,6 +197,25 @@ const QuizResultClient = () => {
                 const studentUidParam = searchParams.get("studentUid");
                 const childIdParam = searchParams.get("childId");
 
+                // Fetch Learning Plan Progress if user is logged in
+                if (user) {
+                    try {
+                        const cid = childIdParam || quizSession?.userDetails?.activeChildId || quizSession?.userDetails?.childId || 'default';
+                        // Determine UID to use for progress fetch
+                        // If admin view with phone, use that phone/uid
+                        // If normal user, use user.uid
+                        let progressUid = user.uid;
+                        if (phoneParam && adminView === 'true') {
+                            progressUid = phoneParam.replace(/\D/g, '').slice(-10); // Simple hack, ideally pass full uid if known
+                        }
+
+                        // We need to fetch progress logic here or in a separate effect. 
+                        // Doing it separate is cleaner to avoid clogging this heavy effect.
+                    } catch (e) {
+                        console.error("Error prep-fetch progress", e);
+                    }
+                }
+
                 let targetReport = null;
 
                 // Case 0: Admin View
@@ -321,6 +340,39 @@ const QuizResultClient = () => {
 
         loadReport();
     }, [quizSession, user, userData, reportId]); // Added reportId to trigger refresh when viewing different reports
+
+    // Fetch Learning Progress
+    const [learningProgress, setLearningProgress] = useState([]);
+    useEffect(() => {
+        const fetchProgress = async () => {
+            if (!user) return;
+            try {
+                const childId = quizSession?.userDetails?.activeChildId || quizSession?.userDetails?.childId || 'default';
+                const uid = user.uid; // Use auth user uid
+
+                // If viewing as admin, we might need to adjust, but let's assume User view for now as this is "Your Learning Plan"
+
+                const res = await fetch(`/api/learning-plan/progress/${childId}?uid=${encodeURIComponent(uid)}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success) {
+                        setLearningProgress(data.data || []);
+                    }
+                }
+            } catch (e) {
+                console.error("Error fetching progress", e);
+            }
+        };
+        fetchProgress();
+    }, [user, quizSession]);
+
+    const isLocked = (dayIndex) => {
+        if (dayIndex === 0) return false;
+        // Locked if previous day (dayIndex - 1 + 1 = dayIndex) is NOT completed.
+        // learningProgress stores day_number (1-based).
+        // To unlock Day 2 (index 1), we need Day 1 (number 1) completed.
+        return !learningProgress.some(p => p.day_number === dayIndex && p.status === 'completed');
+    };
 
     // Check for celebration (100% Score)
     useEffect(() => {
@@ -1236,7 +1288,33 @@ const QuizResultClient = () => {
                                                     <td>Day {item.day}</td>
                                                     <td>{item.skillCategory}</td>
                                                     <td>{item.learnWithTutor}</td>
-                                                    <td>{item.selfLearn}</td>
+                                                    <td>
+                                                        <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+                                                            {/* Practice Button */}
+                                                            <Button
+                                                                variant="outlined"
+                                                                size="small"
+                                                                startIcon={<Play size={14} />}
+                                                                disabled={isLocked(index)}
+                                                                onClick={() => navigate(`/practice?category=${encodeURIComponent(item.skillCategory)}&day=${item.day}&grade=${displayGrade}`)}
+                                                                sx={{ textTransform: 'none', justifyContent: 'flex-start' }}
+                                                            >
+                                                                Practice
+                                                            </Button>
+                                                            {/* Assessment Button */}
+                                                            <Button
+                                                                variant="contained"
+                                                                size="small"
+                                                                color="primary"
+                                                                startIcon={<Target size={14} />}
+                                                                disabled={isLocked(index)}
+                                                                onClick={() => navigate(`/assessment?category=${encodeURIComponent(item.skillCategory)}&day=${item.day}&grade=${displayGrade}`)}
+                                                                sx={{ textTransform: 'none', justifyContent: 'flex-start', background: '#667eea' }}
+                                                            >
+                                                                Assessment
+                                                            </Button>
+                                                        </div>
+                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -1315,7 +1393,30 @@ const QuizResultClient = () => {
                                         <Target size={16} />
                                         <strong>Self Learn</strong>
                                     </div>
-                                    <p>{item.selfLearn}</p>
+                                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                                        <Button
+                                            variant="outlined"
+                                            size="small"
+                                            startIcon={<Play size={14} />}
+                                            disabled={isLocked(index)}
+                                            onClick={() => navigate(`/practice?category=${encodeURIComponent(item.skillCategory)}&day=${item.day}&grade=${displayGrade}`)}
+                                            fullWidth
+                                        >
+                                            Practice
+                                        </Button>
+                                        <Button
+                                            variant="contained"
+                                            size="small"
+                                            color="primary"
+                                            startIcon={<Target size={14} />}
+                                            disabled={isLocked(index)}
+                                            onClick={() => navigate(`/assessment?category=${encodeURIComponent(item.skillCategory)}&day=${item.day}&grade=${displayGrade}`)}
+                                            fullWidth
+                                            sx={{ background: '#667eea' }}
+                                        >
+                                            Assessment
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
                         ))}

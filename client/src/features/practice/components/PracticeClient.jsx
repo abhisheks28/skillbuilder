@@ -7,29 +7,20 @@ import LoadingScreen from "@/components/LoadingScreen/LoadingScreen.component";
 import getRandomInt from "@/utils/workload/GetRandomInt";
 import SATInstructions from "@/components/SAT/SATInstructions.component";
 
-const GRADE_LOADERS = {
-    1: () => import('@/questionBook/Grade1/GetGrade1Question'),
-    2: () => import('@/questionBook/Grade2/GetGrade2Question.mjs'),
-    3: () => import('@/questionBook/Grade3/GetGrade3Question.mjs'),
-    4: () => import('@/questionBook/Grade4/GetGrade4Question.mjs'),
-    5: () => import('@/questionBook/Grade5/GetGrade5Question.mjs'),
-    6: () => import('@/questionBook/Grade6/GetGrade6Question.mjs'),
-    7: () => import('@/questionBook/Grade7/GetGrade7Question.mjs'),
-    8: () => import('@/questionBook/Grade8/GetGrade8Question.mjs'),
-    9: () => import('@/questionBook/Grade9/GetGrade9Question.mjs'),
-    10: () => import('@/questionBook/Grade10/GetGrade10Question.mjs'),
-    'SAT': () => import('@/questionBook/SAT/GetSATQuestion.mjs'),
-};
+import { GRADE_LOADERS } from "../utils/gradeLoaders";
 
 const PracticeClientContent = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const gradeParam = searchParams.get('grade');
+    const categoryParam = searchParams.get('category');
     let grade = 1;
     if (gradeParam === 'SAT') {
         grade = 'SAT';
     } else if (gradeParam) {
-        grade = parseInt(gradeParam);
+        // Handle "Grade 2" or just "2"
+        const cleanGrade = gradeParam.replace(/Grade\s*/i, '');
+        grade = parseInt(cleanGrade);
     }
     const [questions, setQuestions] = useState(null);
     const [generatorMap, setGeneratorMap] = useState(null);
@@ -50,33 +41,61 @@ const PracticeClientContent = () => {
             }
 
             try {
+                // Load Frontend Module for Generator Map (needed for Repeat functionality and fallback)
                 const module = await loader();
                 const questionBook = module.default;
                 const mapKey = grade === 'SAT' ? 'GradeSATGeneratorMap' : `Grade${grade}GeneratorMap`;
                 const map = module[mapKey];
-
-                if (!questionBook) {
-                    throw new Error(`No question book found for Grade ${grade}`);
-                }
-
-                // Flatten the Question Book into a Session Paper
-                const generatedPaper = [];
-                let qIndex = 1;
-                while (questionBook[`q${qIndex}`]) {
-                    const qs = questionBook[`q${qIndex}`];
-                    if (qs && qs.length > 0) {
-                        const randomInt = getRandomInt(0, qs.length - 1);
-                        generatedPaper.push({ ...qs[randomInt], userAnswer: null });
-                    }
-                    qIndex++;
-                }
-
-                if (generatedPaper.length === 0) {
-                    console.warn("Generated paper is empty", questionBook);
-                }
-
-                setQuestions(generatedPaper);
                 setGeneratorMap(map);
+
+                // Attempt to fetch from Backend API
+                let backendQuestions = null;
+                if (categoryParam) {
+                    try {
+                        const res = await fetch(`/api/practice/generate?grade=${grade}&category=${encodeURIComponent(categoryParam)}&count=10`);
+                        if (res.ok) {
+                            backendQuestions = await res.json();
+                            // Ensure options are properly formatted if needed, backend sends consistent JSON
+                        }
+                    } catch (apiErr) {
+                        console.warn("Backend fetch failed, falling back to frontend", apiErr);
+                    }
+                }
+
+                if (backendQuestions && backendQuestions.length > 0) {
+                    setQuestions(backendQuestions);
+                } else {
+                    // Fallback to Frontend Generation
+                    if (!questionBook) {
+                        throw new Error(`No question book found for Grade ${grade}`);
+                    }
+
+                    if (categoryParam) {
+                        if (map && map[categoryParam]) {
+                            const generator = map[categoryParam];
+                            const generated = Array.from({ length: 10 }, () => generator());
+                            const finalQs = generated.map(q => ({ ...q, topic: q.topic || categoryParam, userAnswer: null }));
+                            setQuestions(finalQs);
+                        } else {
+                            // If backend failed and frontend doesn't have it, error
+                            throw new Error(`Category '${categoryParam}' not found for Grade ${grade}`);
+                        }
+                    } else {
+                        // Mixed Paper (Frontend Only)
+                        const generatedPaper = [];
+                        let qIndex = 1;
+                        while (questionBook[`q${qIndex}`]) {
+                            const qs = questionBook[`q${qIndex}`];
+                            if (qs && qs.length > 0) {
+                                const randomInt = getRandomInt(0, qs.length - 1);
+                                generatedPaper.push({ ...qs[randomInt], userAnswer: null });
+                            }
+                            qIndex++;
+                        }
+                        if (generatedPaper.length === 0) console.warn("Generated paper is empty");
+                        setQuestions(generatedPaper);
+                    }
+                }
             } catch (err) {
                 console.error("Failed to load grade data", err);
                 setError(err.message);

@@ -6,7 +6,7 @@ import { ArrowRight, Check, RefreshCcw } from "lucide-react";
 import MathRenderer from "@/components/MathRenderer/MathRenderer.component";
 import { getHint } from "./hintHelper";
 
-const PracticeMCQ = ({ onNext, question, topic, options, answer, image, activeQuestionIndex, onCorrect, onRepeat, onWrong, isLastQuestion }) => {
+const PracticeMCQ = ({ onNext, question, topic, options, answer, image, activeQuestionIndex, onCorrect, onRepeat, onWrong, isLastQuestion, mode = 'practice', onSubmitAnswer }) => {
     const [selectedOption, setSelectedOption] = useState(null);
     const [isCorrect, setIsCorrect] = useState(null); // true, false, or null
     const [showHint, setShowHint] = useState(false);
@@ -27,6 +27,10 @@ const PracticeMCQ = ({ onNext, question, topic, options, answer, image, activeQu
     }, [question, activeQuestionIndex]);
 
     const handleOptionSelect = (value) => {
+        if (mode === 'assessment') {
+            setSelectedOption(value);
+            return;
+        }
         if (isCorrect === true) return;
         if (waitingForHint || showAnswer) return;
 
@@ -159,9 +163,15 @@ const PracticeMCQ = ({ onNext, question, topic, options, answer, image, activeQu
 
                 {/* Navigation Buttons */}
                 <div className={Styles.navigationContainer}>
-                    {isCorrect === true && (
+                    {(isCorrect === true || (mode === 'assessment' && selectedOption)) && (
                         <Button
-                            onClick={onNext}
+                            onClick={() => {
+                                if (mode === 'assessment') {
+                                    onSubmitAnswer(selectedOption);
+                                } else {
+                                    onNext();
+                                }
+                            }}
                             size="large"
                             endIcon={<ArrowRight />}
                             className={Styles.nextButton}

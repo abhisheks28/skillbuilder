@@ -7,7 +7,7 @@ import MathRenderer from "@/components/MathRenderer/MathRenderer.component";
 import { getHint } from "./hintHelper";
 import { validateFractionValue } from "./fractionValidator";
 
-const PracticeUserInput = ({ onNext, question, topic, answer, activeQuestionIndex, grade, image, keypadMode, onCorrect, onRepeat, onWrong, isLastQuestion }) => {
+const PracticeUserInput = ({ onNext, question, topic, answer, activeQuestionIndex, grade, image, keypadMode, onCorrect, onRepeat, onWrong, isLastQuestion, mode = 'practice', onSubmitAnswer }) => {
     const [inputValue, setInputValue] = useState("");
     const [isCorrect, setIsCorrect] = useState(null); // true, false, or null
     const [showHint, setShowHint] = useState(false);
@@ -44,6 +44,10 @@ const PracticeUserInput = ({ onNext, question, topic, answer, activeQuestionInde
     };
 
     const validateInput = (val) => {
+        if (mode === 'assessment') {
+            setInputValue(val);
+            return;
+        }
         if (!val) {
             setInputValue("");
             return;
@@ -202,9 +206,15 @@ const PracticeUserInput = ({ onNext, question, topic, answer, activeQuestionInde
                 </div>
 
                 <div className={Styles.navigationContainer}>
-                    {isCorrect === true && (
+                    {(isCorrect === true || (mode === 'assessment' && inputValue)) && (
                         <Button
-                            onClick={onNext}
+                            onClick={() => {
+                                if (mode === 'assessment') {
+                                    onSubmitAnswer(inputValue);
+                                } else {
+                                    onNext();
+                                }
+                            }}
                             size="large"
                             endIcon={<ArrowRight />}
                             className={Styles.nextButton}
