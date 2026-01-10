@@ -1,0 +1,102 @@
+.buttonContainer {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.practiceButton,
+.assessmentButton {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    white-space: nowrap;
+}
+
+.practiceButton {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+}
+
+.practiceButton:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.assessmentButton {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.assessmentButton:hover {
+    background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.assessmentButton.completed {
+    background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+}
+
+.assessmentButton.completed:hover {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.buttonIcon {
+    flex-shrink: 0;
+}
+
+.countBadge {
+    background: rgba(255, 255, 255, 0.25);
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.lockedContainer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #f1f5f9;
+    border-radius: 6px;
+    color: #94a3b8;
+}
+
+.lockIcon {
+    flex-shrink: 0;
+}
+
+.lockedText {
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .buttonContainer {
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .practiceButton,
+    .assessmentButton {
+        width: 100%;
+        justify-content: center;
+        padding: 8px 12px;
+    }
+
+    .lockedContainer {
+        width: 100%;
+        justify-content: center;
+    }
+}

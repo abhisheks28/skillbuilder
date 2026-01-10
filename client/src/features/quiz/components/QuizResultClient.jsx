@@ -53,6 +53,8 @@ import { getUserDatabaseKey } from "@/utils/authUtils";
 // Note: Keeping getUserDatabaseKey if used for deriving user key/phone logic, but removing database refs.
 import { Button, Dialog, DialogTitle, DialogContent, IconButton, CircularProgress, TextField, MenuItem, Link as MuiLink, Select, FormControl, InputLabel } from "@mui/material";
 import { useAuth } from "@/features/auth/context/AuthContext";
+import DayProgressButton from "@/features/skill-practice/components/DayProgressButton";
+import { useSkillProgress } from "@/features/skill-practice/hooks/useSkillProgress";
 // import { ref, get, set, update } from "firebase/database";
 
 
@@ -186,6 +188,10 @@ const QuizResultClient = () => {
     const [floatingEmojis, setFloatingEmojis] = useState([]);
     const [isAdminView, setIsAdminView] = useState(false);
     const [studentInfo, setStudentInfo] = useState(null); // For teacher view
+
+    // Skill progress state for day locking
+    const [skillProgress, setSkillProgress] = useState([]);
+    const [skillProgressLoading, setSkillProgressLoading] = useState(false);
 
     useEffect(() => {
         const loadReport = async () => {
@@ -386,6 +392,28 @@ const QuizResultClient = () => {
     const [topicModalOpen, setTopicModalOpen] = useState(false);
     const [questionModalOpen, setQuestionModalOpen] = useState(false);
     const [learningPlanModalOpen, setLearningPlanModalOpen] = useState(false);
+
+    // Fetch skill progress for day locking
+    useEffect(() => {
+        const fetchSkillProgress = async () => {
+            if (!reportId || !user?.uid) return;
+
+            setSkillProgressLoading(true);
+            try {
+                const response = await fetch(`/api/skill-practice/progress/${reportId}?uid=${encodeURIComponent(user.uid)}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setSkillProgress(data.days || []);
+                }
+            } catch (error) {
+                console.error('Error fetching skill progress:', error);
+            } finally {
+                setSkillProgressLoading(false);
+            }
+        };
+
+        fetchSkillProgress();
+    }, [reportId, user?.uid]);
 
     // Filters for Question-wise Performance
     const [filterCategory, setFilterCategory] = useState("All");
@@ -1226,7 +1254,7 @@ const QuizResultClient = () => {
                                                 <th>Day</th>
                                                 <th>Skill Category</th>
                                                 <th>Learn with Tutor</th>
-                                                <th>Self Learn</th>
+                                                <th>Self Practice</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1236,7 +1264,16 @@ const QuizResultClient = () => {
                                                     <td>Day {item.day}</td>
                                                     <td>{item.skillCategory}</td>
                                                     <td>{item.learnWithTutor}</td>
-                                                    <td>{item.selfLearn}</td>
+                                                    <td>
+                                                        <DayProgressButton
+                                                            day={item.day}
+                                                            category={item.skillCategory}
+                                                            reportId={reportId}
+                                                            isUnlocked={item.day === 1 || skillProgress.find(p => p.day_number === item.day - 1)?.assessment_completed === true}
+                                                            assessmentCompleted={skillProgress.find(p => p.day_number === item.day)?.assessment_completed || false}
+                                                            practiceCount={skillProgress.find(p => p.day_number === item.day)?.practice_count || 0}
+                                                        />
+                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -1313,9 +1350,16 @@ const QuizResultClient = () => {
                                 <div className={Styles.cardSection}>
                                     <div className={Styles.sectionLabel}>
                                         <Target size={16} />
-                                        <strong>Self Learn</strong>
+                                        <strong>Self Practice</strong>
                                     </div>
-                                    <p>{item.selfLearn}</p>
+                                    <DayProgressButton
+                                        day={item.day}
+                                        category={item.skillCategory}
+                                        reportId={reportId}
+                                        isUnlocked={item.day === 1 || skillProgress.find(p => p.day_number === item.day - 1)?.assessment_completed === true}
+                                        assessmentCompleted={skillProgress.find(p => p.day_number === item.day)?.assessment_completed || false}
+                                        practiceCount={skillProgress.find(p => p.day_number === item.day)?.practice_count || 0}
+                                    />
                                 </div>
                             </div>
                         ))}

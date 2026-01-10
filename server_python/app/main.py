@@ -8,6 +8,7 @@ from app.features.puzzles.router import router as puzzles_router
 from app.features.lottery.router import router as lottery_router
 from app.features.neet.router import router as neet_router
 from app.features.teachers.router import router as teachers_router
+from app.features.skill_practice.router import router as skill_practice_router
 
 from app.core.config import settings
 
@@ -36,6 +37,7 @@ app.include_router(puzzles_router, prefix="/api/puzzles", tags=["Puzzles"])
 app.include_router(lottery_router, prefix="/api/lottery", tags=["Lottery"])
 app.include_router(neet_router, prefix="/api/neet", tags=["NEET"])
 app.include_router(teachers_router, prefix="/api/teachers", tags=["Teachers"])
+app.include_router(skill_practice_router, prefix="/api/skill-practice", tags=["Skill Practice"])
 
 @app.get("/")
 async def root():

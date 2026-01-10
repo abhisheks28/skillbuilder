@@ -27,6 +27,8 @@ import RapidMath from "@/pages/RapidMath";
 import RapidMathTest from "@/pages/RapidMathTest";
 import RapidMathSummary from "@/pages/RapidMathSummary";
 import SpeedTestPage from "@/pages/SpeedTestPage";
+import SkillPracticeSession from "@/features/skill-practice/components/SkillPracticeSession";
+import SkillAssessmentSession from "@/features/skill-practice/components/SkillAssessmentSession";
 
 // ScrollToTop Component
 function ScrollToTop() {
@@ -62,6 +64,10 @@ function App() {
                             <Route path="/rapid-math/test" element={<RapidMathTest />} />
                             <Route path="/rapid-math/test/summary" element={<RapidMathSummary />} />
                             <Route path="/rapid-math/speed-test" element={<SpeedTestPage />} />
+
+                            {/* Skill Practice Routes (Learning Plan) */}
+                            <Route path="/skill-practice/:reportId/:day" element={<SkillPracticeSession />} />
+                            <Route path="/skill-assessment/:reportId/:day" element={<SkillAssessmentSession />} />
 
                             {/* Protected Routes (Logic handled within components for now, can add ProtectedRoute wrapper later) */}
                             <Route path="/dashboard" element={<DashboardClient />} />
