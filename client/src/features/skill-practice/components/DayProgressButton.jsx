@@ -9,6 +9,7 @@ import Styles from './DayProgressButton.module.css';
  * @param {number} day - Day number
  * @param {string} category - Skill category name 
  * @param {number} reportId - Report ID for tracking
+ * @param {string} grade - Student's grade (e.g., "Grade 5")
  * @param {boolean} isUnlocked - Whether this day is unlocked
  * @param {boolean} assessmentCompleted - Whether assessment is done
  * @param {number} practiceCount - Number of practice sessions completed
@@ -17,6 +18,7 @@ const DayProgressButton = ({
     day,
     category,
     reportId,
+    grade = "Grade 1",
     isUnlocked = false,
     assessmentCompleted = false,
     practiceCount = 0
@@ -26,14 +28,14 @@ const DayProgressButton = ({
     const handlePracticeClick = () => {
         if (!isUnlocked) return;
         navigate(`/skill-practice/${reportId}/${day}`, {
-            state: { category, mode: 'practice' }
+            state: { category, grade, mode: 'practice' }
         });
     };
 
     const handleAssessmentClick = () => {
         if (!isUnlocked) return;
         navigate(`/skill-assessment/${reportId}/${day}`, {
-            state: { category, mode: 'assessment' }
+            state: { category, grade, mode: 'assessment' }
         });
     };
 

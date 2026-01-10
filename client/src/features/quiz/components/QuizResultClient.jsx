@@ -1269,6 +1269,7 @@ const QuizResultClient = () => {
                                                             day={item.day}
                                                             category={item.skillCategory}
                                                             reportId={reportId}
+                                                            grade={displayGrade}
                                                             isUnlocked={item.day === 1 || skillProgress.find(p => p.day_number === item.day - 1)?.assessment_completed === true}
                                                             assessmentCompleted={skillProgress.find(p => p.day_number === item.day)?.assessment_completed || false}
                                                             practiceCount={skillProgress.find(p => p.day_number === item.day)?.practice_count || 0}
@@ -1356,6 +1357,7 @@ const QuizResultClient = () => {
                                         day={item.day}
                                         category={item.skillCategory}
                                         reportId={reportId}
+                                        grade={displayGrade}
                                         isUnlocked={item.day === 1 || skillProgress.find(p => p.day_number === item.day - 1)?.assessment_completed === true}
                                         assessmentCompleted={skillProgress.find(p => p.day_number === item.day)?.assessment_completed || false}
                                         practiceCount={skillProgress.find(p => p.day_number === item.day)?.practice_count || 0}

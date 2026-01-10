@@ -1,21 +1,48 @@
 "use client";
-import React, { useState, useEffect, useMemo, useRef, useContext } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/features/auth/context/AuthContext";
-import { QuizSessionContext } from "@/features/quiz/context/QuizSessionContext";
 import { completeAssessment } from "../services/skillPracticeApi";
 import { SecureTestEnvironment } from "@/components/Security";
 import Timer from "@/components/Timer/Timer.component";
 import TypeMCQ from "@/components/QuestionTypes/TypeMCQ/TypeMCQ.component";
 import TypeUserInput from "@/components/QuestionTypes/TypeUserInput/TypeUserInput.component";
+import TypeTableInput from "@/components/QuestionTypes/TypeTableInput/TypeTableInput.component";
+import TypeTrueAndFalse from "@/components/QuestionTypes/TypeTrueAndFalse/TypeTrueAndFalse.component";
+import TypeFactorTree from "@/components/QuestionTypes/TypeFactorTree/TypeFactorTree.component";
 import QuestionPalette from "@/components/QuestionPalette/QuestionPalette.component";
 import LoadingScreen from "@/components/LoadingScreen/LoadingScreen.component";
 import { toast } from "react-toastify";
-import { Dialog, DialogTitle, DialogContent, Button } from "@mui/material";
+import { Button } from "@mui/material";
 import Styles from "@/features/quiz/components/Quiz.module.css";
 
-// Import grade generators
+// Import all grade generator maps
 import { Grade1GeneratorMap } from "@/questionBook/Grade1/GetGrade1Question";
+import { Grade2GeneratorMap } from "@/questionBook/Grade2/GetGrade2Question";
+import { Grade3GeneratorMap } from "@/questionBook/Grade3/GetGrade3Question";
+import { Grade4GeneratorMap } from "@/questionBook/Grade4/GetGrade4Question";
+import { Grade5GeneratorMap } from "@/questionBook/Grade5/GetGrade5Question";
+import { Grade6GeneratorMap } from "@/questionBook/Grade6/GetGrade6Question";
+import { Grade7GeneratorMap } from "@/questionBook/Grade7/GetGrade7Question";
+import { Grade8GeneratorMap } from "@/questionBook/Grade8/GetGrade8Question";
+import { Grade9GeneratorMap } from "@/questionBook/Grade9/GetGrade9Question";
+import { Grade10GeneratorMap } from "@/questionBook/Grade10/GetGrade10Question";
+
+// Map grade string to generator map
+const GRADE_GENERATOR_MAP = {
+    "Grade 1": Grade1GeneratorMap,
+    "Grade 2": Grade2GeneratorMap,
+    "Grade 3": Grade3GeneratorMap,
+    "Grade 4": Grade4GeneratorMap,
+    "Grade 5": Grade5GeneratorMap,
+    "Grade 6": Grade6GeneratorMap,
+    "Grade 7": Grade7GeneratorMap,
+    "Grade 8": Grade8GeneratorMap,
+    "Grade 9": Grade9GeneratorMap,
+    "Grade 10": Grade10GeneratorMap,
+    "Grade 11": Grade10GeneratorMap,
+    "Grade 12": Grade10GeneratorMap,
+};
 
 // Category to topic mapping 
 const CATEGORY_TOPIC_MAP = {
@@ -25,7 +52,9 @@ const CATEGORY_TOPIC_MAP = {
     "Number Sense / Expanded Form": ["Number Sense / Place Value"],
     "Operations / Addition": ["Addition / Basics", "Addition / Word Problems"],
     "Operations / Subtraction": ["Subtraction / Basics", "Subtraction / Word Problems"],
-    "Operations / Multiplication": ["Addition / Basics"],
+    "Operations / Multiplication": ["Multiplication / Basics", "Multiplication / Word Problems"],
+    "Operations / Division": ["Division / Basics", "Division / Word Problems"],
+    "Addition / Basics": ["Addition / Basics"],
     "Addition / Word Problems": ["Addition / Basics", "Addition / Word Problems"],
     "Subtraction / Basics": ["Subtraction / Basics"],
     "Subtraction / Word Problems": ["Subtraction / Word Problems"],
@@ -33,6 +62,14 @@ const CATEGORY_TOPIC_MAP = {
     "Geometry / Spatial": ["Geometry / Spatial"],
     "Measurement / Weight": ["Measurement / Weight"],
     "Measurement / Capacity": ["Measurement / Capacity"],
+    "Measurement / Length": ["Measurement / Length"],
+    "Fractions / Basics": ["Fractions / Basics"],
+    "Decimals / Basics": ["Decimals / Basics"],
+};
+
+const getGeneratorMapForGrade = (grade) => {
+    if (!grade) return Grade1GeneratorMap;
+    return GRADE_GENERATOR_MAP[grade] || Grade1GeneratorMap;
 };
 
 const generateQuestionsForCategory = (category, count, generatorMap) => {
@@ -57,8 +94,19 @@ const generateQuestionsForCategory = (category, count, generatorMap) => {
         }
     }
 
+    // Fallback to any available generators
     if (matchingGenerators.length === 0) {
-        console.warn(`No generators found for category: ${category}`);
+        const allGenerators = Object.entries(generatorMap);
+        if (allGenerators.length > 0) {
+            console.warn(`No specific generators for category: ${category}. Using fallback.`);
+            for (let i = 0; i < Math.min(3, allGenerators.length); i++) {
+                const [topic, generator] = allGenerators[i];
+                matchingGenerators.push({ topic, generator });
+            }
+        }
+    }
+
+    if (matchingGenerators.length === 0) {
         return [];
     }
 
@@ -82,8 +130,8 @@ const generateQuestionsForCategory = (category, count, generatorMap) => {
 };
 
 /**
- * SkillAssessmentSession - Assessment mode with anti-cheating like main quiz
- * Uses SecureTestEnvironment wrapper for tab-switch detection, right-click blocking, etc.
+ * SkillAssessmentSession - Assessment mode with anti-cheating
+ * Uses SecureTestEnvironment wrapper and dynamic grade-based question generation
  */
 const SkillAssessmentSession = () => {
     const { reportId, day } = useParams();
@@ -92,11 +140,12 @@ const SkillAssessmentSession = () => {
     const { user } = useAuth();
 
     const category = location.state?.category || "Assessment";
+    const grade = location.state?.grade || "Grade 1"; // Get grade from navigation state
     const dayNumber = parseInt(day, 10);
 
     const [questionPaper, setQuestionPaper] = useState([]);
     const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
-    const [remainingTime, setRemainingTime] = useState(300); // 5 minutes for 5 questions
+    const [remainingTime, setRemainingTime] = useState(300); // 5 minutes
     const [isInitializing, setIsInitializing] = useState(true);
     const [showIntro, setShowIntro] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -104,41 +153,40 @@ const SkillAssessmentSession = () => {
     const [result, setResult] = useState(null);
 
     const timeTakeRef = useRef(300);
-    const lastTimeRef = useRef(300);
     const startTimeRef = useRef(Date.now());
 
-    const generatorMap = useMemo(() => Grade1GeneratorMap, []);
+    // Get generator map based on student's grade
+    const generatorMap = useMemo(() => {
+        console.log(`[SkillAssessmentSession] Using generators for grade: ${grade}`);
+        return getGeneratorMapForGrade(grade);
+    }, [grade]);
 
     // Generate 5 questions on mount
     useEffect(() => {
         const generated = generateQuestionsForCategory(category, 5, generatorMap);
+        console.log(`[SkillAssessmentSession] Generated ${generated.length} questions for ${category} (${grade})`);
         setQuestionPaper(generated);
         setTimeout(() => setIsInitializing(false), 1000);
     }, [category, generatorMap]);
 
-    // Timer callback
     const getTimeTaken = (time) => {
         timeTakeRef.current = time;
         setRemainingTime(time);
     };
 
-    // Auto-submit when timer finishes
     const handleTimerFinished = () => {
         handleSubmitAssessment();
     };
 
-    // Start assessment
     const handleStartAssessment = () => {
         setShowIntro(false);
         startTimeRef.current = Date.now();
     };
 
-    // Exit without completing
     const handleExit = () => {
         navigate(-1);
     };
 
-    // Save current question progress
     const saveCurrentProgress = (answer) => {
         if (!questionPaper[activeQuestionIndex]) return;
 
@@ -154,12 +202,10 @@ const SkillAssessmentSession = () => {
         return newPaper;
     };
 
-    // Navigate to next question
     const handleNext = (answer) => {
         saveCurrentProgress(answer);
 
         if (activeQuestionIndex + 1 >= questionPaper.length) {
-            // Last question - submit
             handleSubmitAssessment();
             return;
         }
@@ -167,7 +213,6 @@ const SkillAssessmentSession = () => {
         setActiveQuestionIndex(prev => prev + 1);
     };
 
-    // Navigate to previous question
     const handlePrevious = () => {
         if (activeQuestionIndex > 0) {
             saveCurrentProgress();
@@ -175,7 +220,6 @@ const SkillAssessmentSession = () => {
         }
     };
 
-    // Jump to specific question
     const handleJumpToQuestion = (index) => {
         if (index >= 0 && index < questionPaper.length) {
             saveCurrentProgress();
@@ -183,7 +227,6 @@ const SkillAssessmentSession = () => {
         }
     };
 
-    // Answer change handler
     const handleAnswerChange = (answer) => {
         if (!questionPaper[activeQuestionIndex]) return;
         const currentQuestion = { ...questionPaper[activeQuestionIndex] };
@@ -194,18 +237,15 @@ const SkillAssessmentSession = () => {
         setQuestionPaper(newPaper);
     };
 
-    // Submit assessment and unlock next day
     const handleSubmitAssessment = async () => {
         if (isSubmitting) return;
         setIsSubmitting(true);
 
         const timeSpent = Math.floor((Date.now() - startTimeRef.current) / 1000);
 
-        // Calculate score
         let correctCount = 0;
         questionPaper.forEach(q => {
             if (q.userAnswer !== null && q.userAnswer !== undefined) {
-                // Normalize answers for comparison
                 const userAns = String(q.userAnswer).trim().toLowerCase();
                 const correctAns = String(q.answer).trim().toLowerCase();
                 if (userAns === correctAns) {
@@ -239,15 +279,12 @@ const SkillAssessmentSession = () => {
         }
     };
 
-    // Return to learning plan
     const handleViewResults = () => {
         navigate(`/quiz/quiz-result?reportId=${reportId}`);
     };
 
-    // Calculate if last question
     const isLastQuestion = activeQuestionIndex === questionPaper.length - 1;
 
-    // Palette component
     const paletteComponent = useMemo(() => (
         <QuestionPalette
             questions={questionPaper}
@@ -259,101 +296,61 @@ const SkillAssessmentSession = () => {
         />
     ), [questionPaper, activeQuestionIndex, isLastQuestion]);
 
-    // Loading state
     if (isInitializing || questionPaper.length === 0) {
         return (
             <LoadingScreen
                 title={`Loading Day ${dayNumber} Assessment`}
-                subtitle={`Preparing ${category} questions...`}
+                subtitle={`Preparing ${category} questions for ${grade}...`}
             />
         );
     }
 
-    // Intro screen
     if (showIntro) {
         return (
             <div className={Styles.introOverlay}>
                 <div className={Styles.introCard}>
                     <div className={Styles.introHeader}>
                         <h1>Day {dayNumber} Assessment</h1>
-                        <p>{category}</p>
+                        <p>{category} • {grade}</p>
                     </div>
 
                     <div className={Styles.instructionBox}>
                         <h3>Assessment Instructions</h3>
                         <ul className={Styles.instructionList}>
-                            <li>
-                                <strong>Time Duration:</strong> You have <strong>5 minutes</strong> to complete 5 questions.
-                            </li>
-                            <li>
-                                <strong>Purpose:</strong> Complete this assessment to unlock Day {dayNumber + 1}.
-                            </li>
-                            <li>
-                                <strong>Anti-Cheating:</strong> Do not switch tabs or use keyboard shortcuts. The test may auto-submit if violations are detected.
-                            </li>
-                            <li>
-                                <strong>No Going Back:</strong> Once submitted, you cannot retake this assessment for this day.
-                            </li>
+                            <li><strong>Time Duration:</strong> You have <strong>5 minutes</strong> to complete 5 questions.</li>
+                            <li><strong>Purpose:</strong> Complete this assessment to unlock Day {dayNumber + 1}.</li>
+                            <li><strong>Anti-Cheating:</strong> Do not switch tabs or use keyboard shortcuts. The test may auto-submit if violations are detected.</li>
+                            <li><strong>No Going Back:</strong> Once submitted, you cannot retake this assessment for this day.</li>
                         </ul>
                     </div>
 
                     <div className={Styles.introActions}>
-                        <Button
-                            variant="outlined"
-                            size="large"
-                            className={Styles.exitQuizBtn}
-                            onClick={handleExit}
-                        >
-                            Exit
-                        </Button>
-                        <Button
-                            variant="contained"
-                            size="large"
-                            className={Styles.startQuizBtn}
-                            onClick={handleStartAssessment}
-                        >
-                            Start Assessment
-                        </Button>
+                        <Button variant="outlined" size="large" className={Styles.exitQuizBtn} onClick={handleExit}>Exit</Button>
+                        <Button variant="contained" size="large" className={Styles.startQuizBtn} onClick={handleStartAssessment}>Start Assessment</Button>
                     </div>
                 </div>
             </div>
         );
     }
 
-    // Result screen
     if (showResult && result) {
         return (
             <div className={Styles.introOverlay}>
                 <div className={Styles.introCard}>
                     <div className={Styles.introHeader} style={{ textAlign: 'center' }}>
                         <div style={{
-                            width: 80,
-                            height: 80,
-                            borderRadius: '50%',
+                            width: 80, height: 80, borderRadius: '50%',
                             background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            margin: '0 auto 1rem',
-                            fontSize: '2rem'
-                        }}>
-                            ✓
-                        </div>
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            margin: '0 auto 1rem', fontSize: '2rem', color: 'white'
+                        }}>✓</div>
                         <h1>Day {dayNumber} Complete!</h1>
-                        <p>{category}</p>
+                        <p>{category} • {grade}</p>
                     </div>
 
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'center',
-                        gap: '2rem',
-                        margin: '2rem 0',
-                        flexWrap: 'wrap'
-                    }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', margin: '2rem 0', flexWrap: 'wrap' }}>
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '2rem', fontWeight: 700, color: '#1e293b' }}>
-                                {result.correct}/{result.total}
-                            </div>
+                            <div style={{ fontSize: '2rem', fontWeight: 700, color: '#1e293b' }}>{result.correct}/{result.total}</div>
                             <div style={{ color: '#64748b', fontSize: '0.9rem' }}>Correct</div>
                         </div>
                         <div style={{ textAlign: 'center' }}>
@@ -364,39 +361,25 @@ const SkillAssessmentSession = () => {
                         </div>
                     </div>
 
-                    <p style={{
-                        textAlign: 'center',
-                        fontSize: '1.1rem',
-                        color: '#10b981',
-                        fontWeight: 600,
-                        margin: '1.5rem 0'
-                    }}>
+                    <p style={{ textAlign: 'center', fontSize: '1.1rem', color: '#10b981', fontWeight: 600, margin: '1.5rem 0' }}>
                         🎉 Day {dayNumber + 1} is now unlocked!
                     </p>
 
                     <div className={Styles.introActions} style={{ justifyContent: 'center' }}>
                         <Button
-                            variant="contained"
-                            size="large"
+                            variant="contained" size="large"
                             onClick={handleViewResults}
                             style={{
                                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                color: 'white',
-                                textTransform: 'none',
-                                padding: '12px 32px',
-                                borderRadius: 12,
-                                fontSize: '1rem'
+                                color: 'white', textTransform: 'none', padding: '12px 32px', borderRadius: 12, fontSize: '1rem'
                             }}
-                        >
-                            View Learning Plan
-                        </Button>
+                        >View Learning Plan</Button>
                     </div>
                 </div>
             </div>
         );
     }
 
-    // Main assessment UI with SecureTestEnvironment
     return (
         <SecureTestEnvironment
             testType="skill-assessment"
@@ -409,7 +392,6 @@ const SkillAssessmentSession = () => {
             }}
         >
             <div className={Styles.quizPageWrapper}>
-                {/* Main Question Section */}
                 <div className={Styles.questionSection}>
                     {questionPaper[activeQuestionIndex]?.type === "mcq" && (
                         <TypeMCQ
@@ -421,7 +403,7 @@ const SkillAssessmentSession = () => {
                             question={questionPaper[activeQuestionIndex].question}
                             topic={questionPaper[activeQuestionIndex].topic}
                             options={questionPaper[activeQuestionIndex].options}
-                            grade="Grade 1"
+                            grade={grade}
                             timeTakeRef={timeTakeRef}
                             image={questionPaper[activeQuestionIndex].image}
                         />
@@ -435,20 +417,66 @@ const SkillAssessmentSession = () => {
                             activeQuestionIndex={activeQuestionIndex}
                             question={questionPaper[activeQuestionIndex].question}
                             topic={questionPaper[activeQuestionIndex].topic}
-                            grade="Grade 1"
+                            grade={grade}
                             timeTakeRef={timeTakeRef}
                         />
                     )}
+                    {questionPaper[activeQuestionIndex]?.type === "tableInput" && (
+                        <TypeTableInput
+                            onClick={handleNext}
+                            onPrevious={handlePrevious}
+                            onAnswerChange={handleAnswerChange}
+                            questionPaper={questionPaper}
+                            activeQuestionIndex={activeQuestionIndex}
+                            topic={questionPaper[activeQuestionIndex].topic}
+                            grade={grade}
+                            timeTakeRef={timeTakeRef}
+                        />
+                    )}
+                    {questionPaper[activeQuestionIndex]?.type === "trueAndFalse" && (
+                        <TypeTrueAndFalse
+                            onClick={handleNext}
+                            onPrevious={handlePrevious}
+                            onAnswerChange={handleAnswerChange}
+                            questionPaper={questionPaper}
+                            activeQuestionIndex={activeQuestionIndex}
+                            question={questionPaper[activeQuestionIndex].question}
+                            topic={questionPaper[activeQuestionIndex].topic}
+                            grade={grade}
+                            timeTakeRef={timeTakeRef}
+                        />
+                    )}
+                    {questionPaper[activeQuestionIndex]?.type === "factorTree" && (
+                        <TypeFactorTree
+                            onClick={handleNext}
+                            onPrevious={handlePrevious}
+                            onAnswerChange={handleAnswerChange}
+                            questionPaper={questionPaper}
+                            activeQuestionIndex={activeQuestionIndex}
+                            topic={questionPaper[activeQuestionIndex].topic}
+                            grade={grade}
+                            timeTakeRef={timeTakeRef}
+                        />
+                    )}
+                    {/* Fallback for unknown question types - render as text */}
+                    {!["mcq", "userInput", "tableInput", "trueAndFalse", "factorTree"].includes(questionPaper[activeQuestionIndex]?.type) && (
+                        <div style={{ padding: '2rem', textAlign: 'center' }}>
+                            <p style={{ fontSize: '1.2rem', marginBottom: '1rem' }}>
+                                {questionPaper[activeQuestionIndex]?.question || 'Loading question...'}
+                            </p>
+                            <p style={{ color: '#666', fontSize: '0.9rem' }}>
+                                Question type: {questionPaper[activeQuestionIndex]?.type || 'unknown'}
+                            </p>
+                            <Button variant="contained" onClick={() => handleNext(null)} style={{ marginTop: '1rem' }}>
+                                Next Question
+                            </Button>
+                        </div>
+                    )}
                 </div>
 
-                {/* Sidebar with Timer and Palette */}
                 <div className={Styles.sidebarSection}>
                     <div className={Styles.timerSection}>
-                        <Timer
-                            timerFinished={handleTimerFinished}
-                            getTimeTaken={getTimeTaken}
-                            initialTime={remainingTime}
-                        />
+                        <Timer timerFinished={handleTimerFinished} getTimeTaken={getTimeTaken} initialTime={remainingTime} />
                     </div>
                     <div className={Styles.paletteSection}>
                         {paletteComponent}
