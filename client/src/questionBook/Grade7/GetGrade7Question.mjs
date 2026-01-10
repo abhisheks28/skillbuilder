@@ -33,6 +33,10 @@ import {
     generatePerimeter
 } from '../Grade10/grade10Generators.mjs';
 
+import {
+    generateFactorTree,
+} from '../Grade5/grade5Generators.mjs';
+
 const generate = (generator, count = 10) => {
     return Array.from({ length: count }, () => generator());
 };
@@ -184,7 +188,11 @@ export const Grade7GeneratorMap = {
     "Data Handling / Basics": generateDataHandling,
     "Data Handling": generateDataHandling, // Alternate key for regeneration
     "Data Handling / Bar Graph": generateBarGraph,
-    "Data Handling / Graphs": generateBarGraph // Alternate key for regeneration
+    "Data Handling / Graphs": generateBarGraph, // Alternate key for regeneration
+
+    // Factor Tree (imported from Grade5)
+    "Number Theory / Factor Tree": generateFactorTree,
+    "Factor Tree": generateFactorTree,
 };
 
 export default Grade7Questions;

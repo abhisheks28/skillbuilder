@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 import PracticeMCQ from "./PracticeMCQ.component";
 import PracticeUserInput from "./PracticeUserInput.component";
 import PracticeTableInput from "./PracticeTableInput.component";
+import PracticeFactorTree from "./PracticeFactorTree.component";
 import LoadingScreen from "@/components/LoadingScreen/LoadingScreen.component";
 // import getRandomInt from "../../app/workload/GetRandomInt"; // relative from src/components/Practice
 import getRandomInt from "@/utils/workload/GetRandomInt"; // Use alias for safety
@@ -268,6 +269,19 @@ const PracticeSession = ({
                             rows={currentQuestion.rows}
                             variant={currentQuestion.variant}
                             answer={currentQuestion.answer}
+                            onNext={handleNext}
+                            onCorrect={() => handleCorrectAnswer(activeQuestionIndex)}
+                            onWrong={handleWrongAnswer}
+                            onRepeat={() => handleRepeat(activeQuestionIndex)}
+                            isLastQuestion={activeQuestionIndex === questions.length - 1}
+                        />
+                    )}
+                    {currentQuestion.type === "factorTree" && (
+                        <PracticeFactorTree
+                            key={`${activeQuestionIndex}-${currentQuestion.topic}`}
+                            activeQuestionIndex={activeQuestionIndex}
+                            question={currentQuestion}
+                            topic={currentQuestion.topic}
                             onNext={handleNext}
                             onCorrect={() => handleCorrectAnswer(activeQuestionIndex)}
                             onWrong={handleWrongAnswer}
