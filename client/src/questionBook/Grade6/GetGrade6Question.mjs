@@ -32,7 +32,8 @@ import {
     generateHCF,
     generateRatioProportion,
     generateBODMAS,
-    generatePerimeter
+    generatePerimeter,
+    generateClocks
 } from '../Grade10/grade10Generators.mjs';
 
 const generate = (generator, count = 10) => {
@@ -134,7 +135,12 @@ export const Grade6GeneratorMap = {
     "Symmetry / Alphabet": generateAlphabetSymmetry,
     "Number Sense / Number Play": generateNumberPlay,
     "Number Sense / Number Pattern": generateNumberPattern,
-    "Arithmetic / AddSub Multiple": generateAddSubMultipleSelect
+    "Arithmetic / AddSub Multiple": generateAddSubMultipleSelect,
+    "Geometry / 3D Shapes": generateFVETable,
+    "Geometry / Faces Vertices Edges": generateFVETable,
+    "Measurement / Clock": generateClocks,
+    "Measurement / Time": generateClocks,
+    "Clock": generateClocks
 };
 
 export default Grade6Questions;

@@ -39,20 +39,24 @@ const CATEGORY_TOPIC_MAP = {
     "Number Sense / Counting": ["Number Sense / Counting Forwards", "Number Sense / Counting Backwards", "Number Sense / Counting Objects"],
     "Number Sense / Place Value": ["Number Sense / Place Value"],
     "Number Sense / Comparison": ["Number Sense / Comparison"],
-    "Number Sense / Expanded Form": ["Number Sense / Place Value", "Number Sense / Comparison"],
+    "Number Sense / Expanded Form": ["Number Sense / Expanded Form"],
     // Operations
-    "Operations / Addition": ["Addition / Basics", "Addition / Word Problems"],
-    "Operations / Subtraction": ["Subtraction / Basics", "Subtraction / Word Problems"],
-    "Operations / Multiplication": ["Multiplication / Basics", "Multiplication / Word Problems"],
-    "Operations / Division": ["Division / Basics", "Division / Word Problems"],
+    "Operations / Addition": ["Operations / Addition"],
+    "Operations / Subtraction": ["Operations / Subtraction"],
+    "Operations / Multiplication": ["Operations / Multiplication"],
+    "Operations / Division": ["Operations / Division"],
     // Addition and Subtraction
     "Addition / Basics": ["Addition / Basics"],
     "Addition / Word Problems": ["Addition / Basics", "Addition / Word Problems"],
     "Subtraction / Basics": ["Subtraction / Basics"],
     "Subtraction / Word Problems": ["Subtraction / Basics", "Subtraction / Word Problems"],
     // Geometry
-    "Geometry / Shapes": ["Geometry / Shapes", "Geometry / Spatial"],
-    "Geometry / Spatial": ["Geometry / Shapes", "Geometry / Spatial"],
+    "Geometry / Shapes": ["Geometry / Shapes"],
+    "Geometry / Spatial": ["Geometry / Spatial"],
+    "Geometry / Area": ["Geometry / Area"],
+    "Geometry / Perimeter": ["Geometry / Perimeter"],
+    "Measurement / Area": ["Geometry / Area"],
+    "Measurement / Perimeter": ["Geometry / Perimeter"],
     // Measurement
     "Measurement / Weight": ["Measurement / Weight"],
     "Measurement / Capacity": ["Measurement / Capacity"],
@@ -63,6 +67,89 @@ const CATEGORY_TOPIC_MAP = {
     "Fractions / Operations": ["Fractions / Operations"],
     "Decimals / Basics": ["Decimals / Basics"],
     "Decimals / Operations": ["Decimals / Operations"],
+
+    // --- Grade 6 Mappings ---
+    "Integers / Understanding": ["Integers / Understanding"],
+    "Integers / Operations": ["Integers / Add"], // Default to Add or Mixed if available
+    "Integers / Add": ["Integers / Add"],
+    "Integers / Subtract": ["Integers / Subtract"],
+    "Integers / Multiply": ["Integers / Multiply"],
+    "Integers / Divide": ["Integers / Divide"],
+    "Fractions / Add": ["Fractions / Add"],
+    "Fractions / Subtract": ["Fractions / Subtract"],
+    "Fractions / Multiply": ["Fractions / Multiply"],
+    "Fractions / Divide": ["Fractions / Divide"],
+    "Decimals / Conversion": ["Decimals / Conversion"],
+    "Algebra / Expressions": ["Algebra / Expressions"],
+    "Algebra / Equations": ["Algebra / Equations"],
+    // Mensuration Area/Perimeter merged into general section
+    "Data Handling / Mean": ["Data Handling / Mean"],
+    "Data Handling / Median": ["Data Handling / Median"],
+    "Data Handling / Mode": ["Data Handling / Mode"],
+    "Geometry / 3D Shapes": ["Geometry / 3D Shapes"],
+    "Geometry / Faces, Vertices, Edges": ["Geometry / Faces Vertices Edges"],
+    "3D Shapes / Faces, Vertices, Edges": ["Geometry / Faces Vertices Edges"], // Likely format
+    "Symmetry": ["Symmetry / Alphabet"],
+    "Measurement / Clock": ["Measurement / Clock"],
+    "Clock": ["Clock"],
+
+    // --- Grade 7 Mappings ---
+    "Integers / Basics": ["Integers / Mixed Operations"],
+    "Rational Numbers / Operations": ["Rational Numbers / Operations"],
+    "Exponents / Laws": ["Exponents / Product Law"], // Represents general laws
+    "Algebra / Basics": ["Algebra / Basics"],
+    "Algebra / Linear Equations": ["Algebra / Linear Equations"],
+    "Algebra / Word Problems": ["Algebra / Word Problems"],
+    "Geometry / Lines and Angles": ["Geometry / Lines and Angles"],
+    "Geometry / Triangles": ["Geometry / Triangles"],
+    "Geometry / Solid Shapes": ["Geometry / Solid Shapes"],
+    "Mensuration / Perimeter & Area": ["Mensuration / Perimeter & Area"],
+    "Commercial Math / Percentage": ["Commercial Math / Percentage"],
+    "Commercial Math / Profit & Loss": ["Commercial Math / Profit & Loss"],
+    "Commercial Math / Simple Interest": ["Commercial Math / Simple Interest"],
+
+    // --- Grade 8 Mappings ---
+    "Rational Numbers": ["Rational Numbers"],
+    "Linear Equations": ["Linear Equations"],
+    "Understanding Quadrilaterals": ["Understanding Quadrilaterals"],
+    "Practical Geometry": ["Practical Geometry"],
+    "Data Handling": ["Data Handling"],
+    "Squares and Square Roots": ["Squares and Square Roots"],
+    "Cubes and Cube Roots": ["Cubes and Cube Roots"],
+    "Comparing Quantities": ["Comparing Quantities"],
+    "Algebraic Expressions": ["Algebraic Expressions"],
+    "Visualising Solid Shapes": ["Visualising Solid Shapes"],
+    "Mensuration": ["Mensuration"],
+    "Exponents & Powers": ["Exponents & Powers"],
+    "Direct and Inverse Proportions": ["Direct and Inverse Proportions"],
+    "Factorisation": ["Factorisation"],
+    "Introduction to Graphs": ["Introduction to Graphs"],
+    "Playing with Numbers": ["Playing with Numbers"],
+
+    // --- Grade 9 Mappings ---
+    "Number Systems": ["Number System / Real Numbers"],
+    "Polynomials": ["Polynomials / Basics", "Quadratic Equations"], // Merged G10
+    "Coordinate Geometry": ["Coordinate Geometry / Basics", "Coordinate Geometry"], // Merged G10
+    "Linear Equations in Two Variables": ["Linear Equations / Solutions"],
+    "Lines and Angles": ["Lines and Angles"],
+    "Triangles": ["Triangles", "Geometry / Pythagoras Theorem"], // Merged G10
+    "Quadrilaterals": ["Quadrilaterals"],
+    "Area of Parallelograms and Triangles": ["Area of Plane Figures"],
+    "Circles": ["Area of Plane Figures", "Circles"],
+    "Constructions": ["Constructions"],
+    "Heron's Formula": ["Mensuration / Triangle Area"],
+    "Surface Areas and Volumes": ["Mensuration / Volume & SA", "Surface Areas and Volumes"],
+    "Statistics": ["Statistics"],
+    "Probability": ["Probability"],
+
+    // --- Grade 10 Mappings ---
+    "Real Numbers": ["Real Numbers / Natural & Whole"],
+    "Pair of Linear Equations in Two Variables": ["Simultaneous Equations"],
+    "Quadratic Equations": ["Quadratic Equations"],
+    // Duplicates removed (Polynomials, Triangles, Coordinate Geometry, Circles, Constructions, Surface Areas and Volumes, Statistics, Probability)
+    "Introduction to Trigonometry": ["Trigonometry / Standard Angles"],
+    "Some Applications of Trigonometry": ["Trigonometry"],
+    "Areas Related to Circles": ["Area of Plane Figures"],
 };
 
 /**
