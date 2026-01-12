@@ -17,8 +17,11 @@ import DashboardClient from "@/features/dashboard/components/DashboardClient";
 import TeacherDashboard from "@/features/dashboard/components/TeacherDashboard";
 import TeacherStudentView from "@/features/dashboard/components/TeacherStudentView";
 import NeetUploadClient from "@/features/neet/components/NeetUploadClient";
+import NeetAssessmentClient from "@/features/neet/components/NeetAssessmentClient";
 import LotteryPage from "@/features/lottery/components/LotteryPage.component";
 import NeetClient from "@/features/neet/components/NeetClient";
+import NeetTopicSelection from "@/features/neet/components/NeetTopicSelection";
+import NeetPracticeClient from "@/features/neet/components/NeetPracticeClient";
 import PracticeClient from "@/features/practice/components/PracticeClient";
 import QuizClient from "@/features/quiz/components/QuizClient";
 import QuizResultClient from "@/features/quiz/components/QuizResultClient";
@@ -57,6 +60,8 @@ function App() {
                             <Route path="/admin-login" element={<AdminLoginClient />} />
                             <Route path="/lottery" element={<LotteryPage />} />
                             <Route path="/neet" element={<NeetClient />} />
+                            <Route path="/neet/topics/:subject" element={<NeetTopicSelection />} />
+                            <Route path="/neet/practice/:subject" element={<NeetPracticeClient />} />
                             <Route path="/practice" element={<PracticeClient />} />
 
                             {/* Rapid Math Routes */}
@@ -75,6 +80,7 @@ function App() {
                             <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
                             <Route path="/teacher-dashboard/student/:uid" element={<TeacherStudentView />} />
                             <Route path="/teacher-dashboard/neet-upload" element={<NeetUploadClient />} />
+                            <Route path="/teacher-dashboard/neet-assessment" element={<NeetAssessmentClient />} />
                             <Route path="/tutor-bookings" element={<TutorBookingsClient />} />
 
                             {/* Quiz Routes */}

@@ -177,6 +177,17 @@ const TeacherDashboard = () => {
                                 <Upload size={14} />
                                 Upload NEET Questions
                             </button>
+
+                        )}
+
+                        {userData?.neetUploadEnabled && (
+                            <button
+                                onClick={() => navigate('/teacher-dashboard/neet-assessment')}
+                                className="w-full mt-2 py-2.5 px-4 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 hover:text-indigo-700 border border-indigo-200 dark:border-indigo-800 transition-all duration-200 text-xs font-bold flex items-center justify-center gap-2 group"
+                            >
+                                <BookOpen size={14} />
+                                Generate Assessment
+                            </button>
                         )}
 
                         {/* Sign Out */}
@@ -433,10 +444,10 @@ const TeacherDashboard = () => {
                         </>
                     )}
                 </section>
-            </div>
+            </div >
 
             <Footer />
-        </div>
+        </div >
     );
 };
 

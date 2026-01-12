@@ -343,25 +343,44 @@ const SkillAssessmentSession = () => {
             }
         });
 
-        try {
-            const payload = {
-                report_id: parseInt(reportId, 10),
-                day_number: dayNumber,
-                category,
-                questions_attempted: questionPaper.length,
-                correct_answers: correctCount,
-                time_taken_seconds: timeSpent
-            };
-            console.log('[SkillAssessmentSession] Submitting assessment with payload:', payload);
-            console.log('[SkillAssessmentSession] User UID:', user?.uid);
+        const passed = correctCount === questionPaper.length;
 
-            await completeAssessment(user?.uid, payload);
+        try {
+            if (passed) {
+                if (!user || !user.uid) {
+                    toast.error("User not identified. Please login again.");
+                    setIsSubmitting(false);
+                    isSubmittingRef.current = false;
+                    return;
+                }
+
+                const rId = parseInt(reportId, 10);
+                if (isNaN(rId)) {
+                    console.error("Invalid Report ID:", reportId);
+                    toast.error("Invalid Report ID.");
+                    setIsSubmitting(false);
+                    isSubmittingRef.current = false;
+                    return;
+                }
+
+                const payload = {
+                    report_id: rId,
+                    day_number: dayNumber,
+                    category,
+                    questions_attempted: questionPaper.length,
+                    correct_answers: correctCount,
+                    time_taken_seconds: timeSpent
+                };
+                console.log('[SkillAssessmentSession] Submitting assessment with payload:', payload);
+
+                await completeAssessment(user?.uid, payload);
+            }
 
             setResult({
                 correct: correctCount,
                 total: questionPaper.length,
                 timeSpent,
-                passed: true
+                passed: passed
             });
             setShowResult(true);
             // NOTE: We do NOT reset isSubmittingRef on success to prevent any further actions/retries
@@ -432,44 +451,79 @@ const SkillAssessmentSession = () => {
         return (
             <div className={Styles.introOverlay}>
                 <div className={Styles.introCard}>
-                    <div className={Styles.introHeader} style={{ textAlign: 'center' }}>
-                        <div style={{
-                            width: 80, height: 80, borderRadius: '50%',
-                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            margin: '0 auto 1rem', fontSize: '2rem', color: 'white'
-                        }}>✓</div>
-                        <h1>Day {dayNumber} Complete!</h1>
-                        <p>{category} • {grade}</p>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', margin: '2rem 0', flexWrap: 'wrap' }}>
-                        <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '2rem', fontWeight: 700, color: '#1e293b' }}>{result.correct}/{result.total}</div>
-                            <div style={{ color: '#64748b', fontSize: '0.9rem' }}>Correct</div>
-                        </div>
-                        <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '2rem', fontWeight: 700, color: '#1e293b' }}>
-                                {Math.floor(result.timeSpent / 60)}:{String(result.timeSpent % 60).padStart(2, '0')}
+                    {result.passed ? (
+                        <>
+                            <div className={Styles.introHeader} style={{ textAlign: 'center' }}>
+                                <div style={{
+                                    width: 80, height: 80, borderRadius: '50%',
+                                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    margin: '0 auto 1rem', fontSize: '2rem', color: 'white'
+                                }}>✓</div>
+                                <h1>Day {dayNumber} Complete!</h1>
+                                <p>{category} • {grade}</p>
                             </div>
-                            <div style={{ color: '#64748b', fontSize: '0.9rem' }}>Time Taken</div>
-                        </div>
-                    </div>
 
-                    <p style={{ textAlign: 'center', fontSize: '1.1rem', color: '#10b981', fontWeight: 600, margin: '1.5rem 0' }}>
-                        🎉 Day {dayNumber + 1} is now unlocked!
-                    </p>
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', margin: '2rem 0', flexWrap: 'wrap' }}>
+                                <div style={{ textAlign: 'center' }}>
+                                    <div style={{ fontSize: '2rem', fontWeight: 700, color: '#1e293b' }}>{result.correct}/{result.total}</div>
+                                    <div style={{ color: '#64748b', fontSize: '0.9rem' }}>Correct</div>
+                                </div>
+                                <div style={{ textAlign: 'center' }}>
+                                    <div style={{ fontSize: '2rem', fontWeight: 700, color: '#1e293b' }}>
+                                        {Math.floor(result.timeSpent / 60)}:{String(result.timeSpent % 60).padStart(2, '0')}
+                                    </div>
+                                    <div style={{ color: '#64748b', fontSize: '0.9rem' }}>Time Taken</div>
+                                </div>
+                            </div>
 
-                    <div className={Styles.introActions} style={{ justifyContent: 'center' }}>
-                        <Button
-                            variant="contained" size="large"
-                            onClick={handleViewResults}
-                            style={{
-                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                color: 'white', textTransform: 'none', padding: '12px 32px', borderRadius: 12, fontSize: '1rem'
-                            }}
-                        >View Learning Plan</Button>
-                    </div>
+                            <p style={{ textAlign: 'center', fontSize: '1.1rem', color: '#10b981', fontWeight: 600, margin: '1.5rem 0' }}>
+                                🎉 Day {dayNumber + 1} is now unlocked!
+                            </p>
+
+                            <div className={Styles.introActions} style={{ justifyContent: 'center' }}>
+                                <Button
+                                    variant="contained" size="large"
+                                    onClick={handleViewResults}
+                                    style={{
+                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                        color: 'white', textTransform: 'none', padding: '12px 32px', borderRadius: 12, fontSize: '1rem'
+                                    }}
+                                >View Learning Plan</Button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className={Styles.introHeader} style={{ textAlign: 'center' }}>
+                                <div style={{
+                                    width: 80, height: 80, borderRadius: '50%',
+                                    background: '#ef4444',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    margin: '0 auto 1rem', fontSize: '2rem', color: 'white'
+                                }}>✕</div>
+                                <h1>Assessment Failed</h1>
+                                <p>You scored {result.correct}/{result.total}</p>
+                            </div>
+
+                            <div style={{ textAlign: 'center', margin: '2rem 0', color: '#4b5563' }}>
+                                <p style={{ marginBottom: '1rem', fontSize: '1.1rem' }}>
+                                    You need a perfect score (5/5) to unlock the next day.
+                                </p>
+                                <p>Please practice again and retake the assessment.</p>
+                            </div>
+
+                            <div className={Styles.introActions} style={{ justifyContent: 'center' }}>
+                                <Button
+                                    variant="contained" size="large"
+                                    onClick={() => window.location.reload()}
+                                    style={{
+                                        background: '#ef4444',
+                                        color: 'white', textTransform: 'none', padding: '12px 32px', borderRadius: 12, fontSize: '1rem'
+                                    }}
+                                >Retake Assessment</Button>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         );

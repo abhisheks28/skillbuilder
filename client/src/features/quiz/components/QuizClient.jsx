@@ -23,11 +23,13 @@ import GetGrade8Question from "@/questionBook/Grade8/GetGrade8Question";
 import GetGrade9Question from "@/questionBook/Grade9/GetGrade9Question";
 import Timer from "@/components/Timer/Timer.component";
 import QuestionPalette from "@/components/QuestionPalette/QuestionPalette.component";
+import NeetQuestionPalette from "@/components/QuestionPalette/NeetQuestionPalette.component";
 import LoadingScreen from "@/components/LoadingScreen/LoadingScreen.component";
 import motivationData from "./Assets/motivation.json";
-import { Dialog, DialogTitle, DialogContent, TextField, Button } from "@mui/material";
-// import { ref, update } from "firebase/database";
-// import { firebaseDatabase, getUserDatabaseKey } from "@/backend/firebaseHandler";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { UserCheck } from "lucide-react";
 import { getUserDatabaseKey } from "@/utils/authUtils";
 import { useAuth } from "@/features/auth/context/AuthContext";
 import { SecureTestEnvironment } from "@/components/Security";
@@ -188,7 +190,16 @@ const QuizClient = () => {
         if (typeof window !== 'undefined') {
             window.localStorage.removeItem("quizSession");
         }
-        navigate(-1);
+        const grade = quizContext?.userDetails?.grade || "";
+        if (grade && typeof grade === 'string' && grade.startsWith("NEET")) {
+            // Check if we can go back to specific subject topics
+            if (grade.includes("Physics")) navigate("/neet/topics/Physics");
+            else if (grade.includes("Chemistry")) navigate("/neet/topics/Chemistry");
+            else if (grade.includes("Biology")) navigate("/neet/topics/Biology");
+            else navigate("/neet");
+        } else {
+            navigate("/dashboard");
+        }
     };
 
     const getOrdinal = (n) => {
@@ -711,16 +722,35 @@ const QuizClient = () => {
         handleNext(currentAnswer, timeTakeRef.current);
     };
 
-    const paletteComponent = useMemo(() => (
-        <QuestionPalette
-            questions={questionPaper}
-            activeQuestionIndex={activeQuestionIndex}
-            onSelect={handleJumpToQuestion}
-            onPrevious={handlePrevious}
-            onNext={handlePaletteNext}
-            isLastQuestion={isLastQuestion}
-        />
-    ), [questionPaper, activeQuestionIndex, isLastQuestion]);
+    const isNeet = useMemo(() => {
+        const grade = quizContext?.userDetails?.grade || "";
+        return grade && typeof grade === 'string' && grade.startsWith("NEET");
+    }, [quizContext]);
+
+    const paletteComponent = useMemo(() => {
+        if (isNeet) {
+            return (
+                <NeetQuestionPalette
+                    questions={questionPaper}
+                    activeQuestionIndex={activeQuestionIndex}
+                    onSelect={handleJumpToQuestion}
+                    onPrevious={handlePrevious}
+                    onNext={handlePaletteNext}
+                    isLastQuestion={isLastQuestion}
+                />
+            );
+        }
+        return (
+            <QuestionPalette
+                questions={questionPaper}
+                activeQuestionIndex={activeQuestionIndex}
+                onSelect={handleJumpToQuestion}
+                onPrevious={handlePrevious}
+                onNext={handlePaletteNext}
+                isLastQuestion={isLastQuestion}
+            />
+        );
+    }, [questionPaper, activeQuestionIndex, isLastQuestion, isNeet]);
 
     // Show loading screen while quiz is being prepared or during initial load
     const isLoading = isInitializing || !hydrationDone || !questionPaper || questionPaper.length === 0 || !quizContext.userDetails;
@@ -769,16 +799,16 @@ const QuizClient = () => {
 
                     <div className={Styles.introActions}>
                         <Button
-                            variant="outlined"
-                            size="large"
+                            variant="outline"
+                            size="lg"
                             className={Styles.exitQuizBtn}
                             onClick={handleExitQuiz}
                         >
                             Exit
                         </Button>
                         <Button
-                            variant="contained"
-                            size="large"
+                            variant="default"
+                            size="lg"
                             className={Styles.startQuizBtn}
                             onClick={handleStartQuiz}
                         >
@@ -816,7 +846,11 @@ const QuizClient = () => {
                 {/* Main Question Section */}
                 <div className={Styles.questionSection}>
                     {
-                        questionPaper && questionPaper[activeQuestionIndex] && questionPaper[activeQuestionIndex].type === "mcq" ?
+                        questionPaper && questionPaper[activeQuestionIndex] && (
+                            ['mcq', 'statement', 'statement_based', 'assertion', 'assertion_reason', 'previous', 'neet_pyq', 'match'].includes(
+                                (questionPaper[activeQuestionIndex].type || "").toLowerCase()
+                            )
+                        ) ?
                             <TypeMCQ
                                 onClick={handleNext}
                                 onPrevious={handlePrevious}
@@ -900,56 +934,54 @@ const QuizClient = () => {
                     </div>
                 </div>
 
-                {/* Name Prompt Dialog - Non-dismissible */}
+                {/* Name Prompt Dialog */}
                 <Dialog
                     open={nameDialogOpen}
-                    onClose={() => { }} // Prevent closing by clicking outside
-                    disableEscapeKeyDown // Prevent closing with ESC key
-                    maxWidth="sm"
-                    fullWidth
-                    PaperProps={{
-                        style: {
-                            borderRadius: '16px',
-                            padding: '8px'
-                        }
-                    }}
+                    onOpenChange={() => { }} // Prevent closing via backdrop/escape
                 >
-                    <DialogTitle style={{ textAlign: 'center', fontWeight: 600, fontSize: '1.25rem' }}>
-                        What's your name?
-                    </DialogTitle>
-                    <DialogContent>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
-                            <p style={{ textAlign: 'center', color: '#666', margin: 0 }}>
-                                Please enter the name of the student taking this assessment
-                            </p>
-                            <TextField
-                                autoFocus
-                                fullWidth
-                                label="Student's Name"
-                                variant="outlined"
-                                value={childNameInput}
-                                onChange={(e) => setChildNameInput(e.target.value)}
-                                disabled={savingName}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && childNameInput.trim()) {
-                                        handleSaveNameAndSubmit();
-                                    }
-                                }}
-                                placeholder="Enter your full name"
-                            />
+                    <DialogContent className="sm:max-w-md bg-white border border-slate-200 shadow-xl" onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+                        <DialogHeader>
+                            <div className="flex flex-col items-center space-y-4 pt-4">
+                                <div className="p-4 bg-sky-100 rounded-full text-sky-600 mb-2">
+                                    <UserCheck className="w-10 h-10" />
+                                </div>
+                                <div className="space-y-2 text-center">
+                                    <DialogTitle className="text-2xl font-bold tracking-tight text-center">
+                                        Confirm Submission
+                                    </DialogTitle>
+                                    <p className="text-slate-500 text-base">
+                                        Please enter your name to finalize your assessment results.
+                                    </p>
+                                </div>
+                            </div>
+                        </DialogHeader>
+
+                        <div className="space-y-6 py-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                    Student's Name
+                                </label>
+                                <Input
+                                    autoFocus
+                                    value={childNameInput}
+                                    onChange={(e) => setChildNameInput(e.target.value)}
+                                    disabled={savingName}
+                                    placeholder="Enter your full name"
+                                    className="h-11 text-lg"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && childNameInput.trim()) {
+                                            handleSaveNameAndSubmit();
+                                        }
+                                    }}
+                                />
+                            </div>
+
                             <Button
-                                variant="contained"
                                 onClick={handleSaveNameAndSubmit}
                                 disabled={savingName || !childNameInput.trim()}
-                                style={{
-                                    backgroundColor: '#3c91f3',
-                                    textTransform: 'none',
-                                    fontSize: '1rem',
-                                    padding: '12px 24px',
-                                    borderRadius: '8px'
-                                }}
+                                className="w-full h-12 text-lg font-semibold bg-sky-600 hover:bg-sky-700"
                             >
-                                {savingName ? 'Saving...' : 'Submit Quiz'}
+                                {savingName ? 'Saving...' : 'Submit Assessment'}
                             </Button>
                         </div>
                     </DialogContent>
