@@ -29,3 +29,15 @@ CREATE TABLE IF NOT EXISTS security_violations (
     details JSONB,
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- NEET Assessments
+CREATE TABLE IF NOT EXISTS neet_assessments (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    subject VARCHAR(50) NOT NULL,
+    question_ids JSONB NOT NULL,
+    config JSONB,
+    is_published BOOLEAN DEFAULT FALSE,
+    created_by INTEGER REFERENCES users(user_id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);

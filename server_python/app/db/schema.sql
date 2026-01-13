@@ -142,6 +142,9 @@ CREATE TABLE IF NOT EXISTS lottery_registrations (
 CREATE TABLE IF NOT EXISTS neet_questions (
     id SERIAL PRIMARY KEY,
     subject VARCHAR(50),
+    topic VARCHAR(255),
+    sub_topic VARCHAR(255),
+    question_type VARCHAR(50),
     question_content JSONB,
     uploaded_by INTEGER REFERENCES users(user_id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

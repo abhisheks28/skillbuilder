@@ -139,8 +139,17 @@ export const resetTeacherAssignments = async (teacherUid, adminUid) => {
  * @param {string} adminUid 
  */
 export const updateTeacherPermissions = async (teacherUid, permissions, adminUid) => {
-    // Implement API if needed. For now returning true.
-    return true;
+    try {
+        const response = await fetch(`/api/teachers/${teacherUid}/permissions`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...permissions, adminUid })
+        });
+        return response.ok;
+    } catch (error) {
+        console.error('Error updating teacher permissions:', error);
+        return false;
+    }
 };
 
 /**

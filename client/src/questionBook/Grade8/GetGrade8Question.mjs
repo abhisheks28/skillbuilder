@@ -267,7 +267,11 @@ export const Grade8GeneratorMap = {
     "Introduction to Graphs": generateGraphs,
 
     "Introduction to Graphs / Linear": generateGraphInterpretation,
-    "Playing with Numbers": generatePlayingWithNumbers
+    "Playing with Numbers": generatePlayingWithNumbers,
+
+    // Factor Tree (imported from Grade5)
+    "Number Theory / Factor Tree": generateFactorTree,
+    "Factor Tree": generateFactorTree,
 };
 
 export default Grade8Questions;

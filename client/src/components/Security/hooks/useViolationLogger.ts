@@ -5,7 +5,7 @@ import { ViolationType, ViolationEvent, ViolationLog, BrowserInfo } from '../typ
 // Firebase removed during backend migration
 // import { db, auth } from '@/backend/firebaseHandler'
 // import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore'
-import { useAuth } from '@/context/AuthContext'
+import { useAuth } from '@/features/auth/context/AuthContext'
 
 interface UseViolationLoggerProps {
     testType: 'speed-test' | 'assessment'

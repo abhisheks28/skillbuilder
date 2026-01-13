@@ -67,3 +67,9 @@ class LoginRequest(BaseModel):
 class AdminLoginRequest(BaseModel):
     username: str
     password: str
+
+class GoogleLoginRequest(BaseModel):
+    uid: str
+    email: EmailStr
+    name: str
+    photoURL: Optional[str] = None

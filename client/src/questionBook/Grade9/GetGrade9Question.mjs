@@ -202,7 +202,11 @@ export const Grade9GeneratorMap = {
     "Locating a point in a Cartesian Plane": generateCartesianPoint, // Fix Q14 Retry
     "Algebraic Addition": generateAlgebraicAdditionSubtraction, // Fix Q15 Retry
     "Algebraic Multiplication": generateAlgebraicMultiplication, // Fix Q16 Retry
-    "Algebraic Division": generateAlgebraicDivision // Fix Q17 Retry
+    "Algebraic Division": generateAlgebraicDivision, // Fix Q17 Retry
+
+    // Factor Tree (imported from Grade5)
+    "Number Theory / Factor Tree": generateFactorTree,
+    "Factor Tree": generateFactorTree,
 };
 
 export default Grade9Questions;

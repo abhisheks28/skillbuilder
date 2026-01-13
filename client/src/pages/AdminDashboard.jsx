@@ -1,17 +1,15 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import DashboardContent from '@/components/Admin/DashboardContent';
+import DashboardContent from '@/features/admin/components/DashboardContent';
 
 export default function AdminDashboard() {
     const navigate = useNavigate();
-
-    // In a real app, use a context or API call to check auth
-    // For now, we assume if the component loads, we check session via API
-    // If we can't implement the API check immediately, we'll verify it loads
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     const logoutAdmin = async () => {
         try {
-            await fetch('http://localhost:5000/api/auth/logout', { method: 'POST' });
+            await fetch('/api/auth/logout', { method: 'POST' });
             navigate('/admin-Login');
         } catch (e) {
             console.error("Logout failed", e);
@@ -20,8 +18,34 @@ export default function AdminDashboard() {
 
     useEffect(() => {
         document.title = "Admin Dashboard - Skill Conquest";
-        // Verify Auth API call here...
-    }, []);
+
+        const verifySession = async () => {
+            try {
+                const res = await fetch('/api/auth/admin-verify');
+                if (res.ok) {
+                    setIsAuthenticated(true);
+                } else {
+                    navigate('/admin-Login');
+                }
+            } catch (e) {
+                console.error("Verification failed", e);
+                navigate('/admin-Login');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        verifySession();
+    }, [navigate]);
+
+    if (isLoading) {
+        return (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                Loading...
+            </div>
+        );
+    }
+
+    if (!isAuthenticated) return null;
 
     return <DashboardContent logoutAction={logoutAdmin} />
 }

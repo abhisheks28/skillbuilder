@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Trophy, Clock, CheckCircle2, XCircle, ArrowRight, RotateCcw, Home, ArrowLeft } from "lucide-react"
 import Header from "./homepage/Header"
-import { useAuth } from "@/context/AuthContext"
+import { useAuth } from "@/features/auth/context/AuthContext"
 import { getUserDatabaseKey } from "@/utils/authUtils"
 import Confetti from "react-confetti"
 
