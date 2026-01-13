@@ -271,15 +271,32 @@ async def generate_assessment(
         """
 
         if distribution:
+            # Map frontend friendly types to database types
+            TYPE_MAP = {
+                "mcq": "MCQ",
+                "statement": "STATEMENT_BASED",
+                "assertion": "ASSERTION_REASON",
+                "previous": "NEET_PYQ"
+            }
+
             for dist in distribution:
-                q_type = dist.get('type')
+                raw_type = dist.get('type', '').lower()
+                # Use map if exists, otherwise fallback to substring search (legacy)
+                db_type = TYPE_MAP.get(raw_type, raw_type)
+                
                 count = dist.get('count', 0)
                 if count > 0:
                     type_query = base_query + f" AND question_type ILIKE ${param_idx} ORDER BY RANDOM() LIMIT ${param_idx+1}"
-                    type_params = params + [f"%{q_type}%", count]
+                    
+                    # Use exact match pattern for mapped types, or %like% for others
+                    search_pattern = db_type if raw_type in TYPE_MAP else f"%{db_type}%"
+                    
+                    type_params = params + [search_pattern, count]
+                    
+                    print(f"DEBUG: Querying type '{raw_type}' -> DB '{db_type}' (Pattern: {search_pattern})")
                     rows = await conn.fetch(type_query, *type_params)
                     
-                    print(f"DEBUG: Found {len(rows)} questions for type '{q_type}' (Requested: {count})")
+                    print(f"DEBUG: Found {len(rows)} questions for type '{raw_type}' (Requested: {count})")
                     
                     for r in rows:
                         try:
@@ -368,6 +385,66 @@ async def generate_assessment(
                     continue
 
     return questions
+
+@router.post("/assessment/save")
+async def save_assessment(
+    title: str = Body(...),
+    subject: str = Body(...),
+    question_ids: List[Dict[str, Any]] = Body(...), # Expecting [{"id": 1}, ...] or just ids
+    config: Dict[str, Any] = Body(None),
+    teacherUid: Optional[str] = Body(None)
+):
+    import json
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        user_id = None
+        if teacherUid:
+            user_id = await conn.fetchval("SELECT user_id FROM users WHERE firebase_uid = $1", teacherUid)
+            
+        await conn.execute("""
+            INSERT INTO neet_assessments (title, subject, question_ids, config, created_by)
+            VALUES ($1, $2, $3, $4, $5)
+        """, title, subject, json.dumps(question_ids), json.dumps(config or {}), user_id)
+        
+    return {"success": True}
+
+@router.get("/{subject}/assessments")
+async def list_assessments(subject: str, teacherUid: Optional[str] = Query(None)):
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        query = """
+            SELECT id, title, subject, question_ids, config, created_at
+            FROM neet_assessments
+            WHERE LOWER(subject) = LOWER($1)
+        """
+        params = [subject]
+        
+        if teacherUid:
+            user_id = await conn.fetchval("SELECT user_id FROM users WHERE firebase_uid = $1", teacherUid)
+            if user_id:
+                query += " AND created_by = $2"
+                params.append(user_id)
+            else:
+                # If teacherUid provided but not found, return empty or all? 
+                # Assuming filtering by user is desired, return empty if user not found.
+                return []
+                
+        query += " ORDER BY created_at DESC"
+        
+        rows = await conn.fetch(query, *params)
+        
+        results = []
+        for r in rows:
+            results.append({
+                "id": r['id'],
+                "title": r['title'],
+                "subject": r['subject'],
+                "questionCount": len(json.loads(r['question_ids'])),
+                "config": json.loads(r['config']),
+                "createdAt": r['created_at'].isoformat()
+            })
+            
+    return results
 
 @router.delete("/{subject}/topic")
 async def delete_topic_questions(

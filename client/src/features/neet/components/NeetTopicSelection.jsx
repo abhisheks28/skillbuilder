@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, BookOpen, ChevronRight, ChevronDown, PlayCircle } from 'lucide-react';
-import { getNeetTopics, generateNeetAssessment } from '@/services/neetQuestionService';
+import { getNeetTopics, generateNeetAssessment, saveNeetAssessment, getNeetAssessments } from '@/services/neetQuestionService';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { toast } from 'sonner';
 
@@ -17,6 +17,7 @@ const NeetTopicSelection = () => {
     const [topicsData, setTopicsData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [expandedTopic, setExpandedTopic] = useState(null);
+    const [recentAssessments, setRecentAssessments] = useState([]);
 
     // State for selection and config
     const [selectedTopics, setSelectedTopics] = useState(new Set()); // Set of "Topic" strings
@@ -50,6 +51,12 @@ const NeetTopicSelection = () => {
                 } else {
                     setTopicsData([]);
                 }
+
+                // Fetch recent assessments
+                if (user?.uid) {
+                    const assessments = await getNeetAssessments(subject, user.uid);
+                    setRecentAssessments(assessments);
+                }
             } catch (err) {
                 console.error("Failed to fetch topics", err);
                 toast.error("Failed to load topics");
@@ -58,7 +65,7 @@ const NeetTopicSelection = () => {
             }
         };
         fetchData();
-    }, [subject]);
+    }, [subject, user?.uid]);
 
     const handleBack = () => navigate('/neet');
 
@@ -169,6 +176,23 @@ const NeetTopicSelection = () => {
                 return;
             }
 
+            // Save Assessment (Auto-save)
+            if (user?.uid) {
+                const title = `${subject} Practice - ${new Date().toLocaleString()}`;
+                const savePayload = {
+                    title,
+                    subject,
+                    question_ids: questions.map(q => ({ id: q.id })),
+                    config: {
+                        duration,
+                        topics: subjectsList,
+                        sub_topics: subTopicsList,
+                        distribution: distPayload
+                    }
+                };
+                await saveNeetAssessment(savePayload, user.uid);
+            }
+
             // Navigate with state
             navigate(`/neet/practice/${subject}?mode=assessment`, {
                 state: {
@@ -260,10 +284,72 @@ const NeetTopicSelection = () => {
                         </div>
                     ) : (
                         <div className="flex flex-col gap-3">
-                            <div className="p-4 bg-yellow-50 text-xs font-mono overflow-auto max-h-[500px]">
-                                <h4 className="font-bold mb-2">DEBUG DATA:</h4>
-                                <pre>{JSON.stringify(topicsData, null, 2)}</pre>
-                            </div>
+                            {topicsData.map((topicItem, idx) => {
+                                const topicName = topicItem.topic;
+                                const isExpanded = expandedTopic === topicName;
+                                const isSelected = selectedTopics.has(topicName);
+                                const subTopics = topicItem.sub_topics || [];
+
+                                return (
+                                    <div key={idx} className="border border-slate-200 rounded-xl bg-white overflow-hidden transition-all duration-200">
+                                        {/* Topic Header */}
+                                        <div className={`p-4 flex items-center gap-3 cursor-pointer hover:bg-slate-50 ${isExpanded ? 'bg-slate-50' : ''}`}>
+                                            <div
+                                                onClick={(e) => { e.stopPropagation(); toggleSelection(topicName); }}
+                                                className={`
+                                                    w-5 h-5 rounded border flex items-center justify-center transition-colors
+                                                    ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 hover:border-indigo-400'}
+                                                `}
+                                            >
+                                                {isSelected && <div className="text-white text-xs">✓</div>}
+                                            </div>
+
+                                            <div className="flex-1 flex items-center justify-between" onClick={() => toggleTopic(topicName)}>
+                                                <div>
+                                                    <h3 className="font-semibold text-slate-800">{topicName}</h3>
+                                                    <p className="text-xs text-slate-500">{topicItem.count} Questions • {subTopics.length} Sub-topics</p>
+                                                </div>
+                                                <button className="text-slate-400 hover:text-indigo-600 transition-colors">
+                                                    {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Sub Topics */}
+                                        {isExpanded && (
+                                            <div className="border-t border-slate-100 bg-slate-50/50 p-2 space-y-1">
+                                                {subTopics.map((sub, sIdx) => {
+                                                    const sName = (typeof sub === 'object' && sub) ? sub.name : sub;
+                                                    const sCount = (typeof sub === 'object' && sub) ? (sub.count || 0) : 0;
+                                                    const subKey = `${topicName}|${sName}`;
+                                                    const isSubSelected = selectedSubTopics.has(subKey);
+
+                                                    return (
+                                                        <div
+                                                            key={sIdx}
+                                                            onClick={() => toggleSelection(topicName, sName)}
+                                                            className="flex items-center gap-3 p-2 rounded-lg hover:bg-white hover:shadow-sm cursor-pointer transition-all ml-8"
+                                                        >
+                                                            <div className={`
+                                                                w-4 h-4 rounded border flex items-center justify-center transition-colors
+                                                                ${isSubSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}
+                                                            `}>
+                                                                {isSubSelected && <div className="text-white text-[10px]">✓</div>}
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <span className={`text-sm ${isSubSelected ? 'text-indigo-900 font-medium' : 'text-slate-600'}`}>
+                                                                    {sName}
+                                                                </span>
+                                                                <span className="text-xs text-slate-400 ml-2">({sCount})</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -307,9 +393,28 @@ const NeetTopicSelection = () => {
                                             });
                                             return total;
                                         })()}
+
                                     </span>
                                 </div>
                             </div>
+
+                            {/* Recent Assessments List */}
+                            {recentAssessments.length > 0 && (
+                                <div className="mt-4 border-t border-slate-200 pt-4">
+                                    <h3 className="text-sm font-bold text-slate-700 mb-2">Recent Assessments</h3>
+                                    <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                                        {recentAssessments.map(calc => (
+                                            <div key={calc.id} className="text-xs p-2 bg-slate-50 rounded border border-slate-100 hover:bg-white hover:shadow-sm cursor-pointer transition">
+                                                <div className="font-medium text-slate-800 truncate">{calc.title}</div>
+                                                <div className="flex justify-between text-slate-500 mt-1">
+                                                    <span>{calc.questionCount} Qs</span>
+                                                    <span>{new Date(calc.createdAt).toLocaleDateString()}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Duration */}
                             <div>
@@ -376,10 +481,10 @@ const NeetTopicSelection = () => {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div >
 
-            </main>
-        </div>
+            </main >
+        </div >
     );
 };
 

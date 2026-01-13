@@ -2,9 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/features/auth/context/AuthContext';
-import { getNeetTopics, generateNeetAssessment } from '@/services/neetQuestionService';
+import { getNeetTopics, generateNeetAssessment, saveNeetAssessment, getNeetAssessments } from '@/services/neetQuestionService';
 import { toast } from 'react-toastify';
-import { ArrowLeft, BookOpen, Clock, FileText, Printer, CheckSquare, RefreshCw } from 'lucide-react';
+import { ArrowLeft, BookOpen, Clock, FileText, Printer, CheckSquare, RefreshCw, File } from 'lucide-react';
 
 const SUBJECTS = ['Physics', 'Chemistry', 'Biology'];
 const QUESTION_TYPES = ['MCQ', 'Statement', 'Assertion', 'Previous'];
@@ -12,11 +12,13 @@ const QUESTION_TYPES = ['MCQ', 'Statement', 'Assertion', 'Previous'];
 const NeetAssessmentClient = () => {
     const navigate = useNavigate();
     const { userData } = useAuth();
+    const user = userData ? (userData.user || userData) : null;
 
     // Core selection state
     const [selectedSubject, setSelectedSubject] = useState('Physics');
     const [availableTopics, setAvailableTopics] = useState([]);
     const [selectedTopics, setSelectedTopics] = useState([]);
+    const [recentAssessments, setRecentAssessments] = useState([]);
 
     // Config state
     const [questionCount, setQuestionCount] = useState(10);
@@ -33,9 +35,14 @@ const NeetAssessmentClient = () => {
             const topics = await getNeetTopics(selectedSubject);
             setAvailableTopics(topics);
             setSelectedTopics([]); // Reset on subject change
+
+            if (user?.uid) {
+                const assessments = await getNeetAssessments(selectedSubject, user.uid);
+                setRecentAssessments(assessments);
+            }
         };
         fetchTopics();
-    }, [selectedSubject]);
+    }, [selectedSubject, user?.uid]);
 
     const toggleTopic = (topic) => {
         if (selectedTopics.includes(topic)) {
@@ -93,6 +100,25 @@ const NeetAssessmentClient = () => {
                 };
                 setGeneratedPaper(paperObj);
                 toast.success(`Generated ${result.length} questions`);
+
+                // Autosave
+                if (user?.uid) {
+                    const title = `${selectedSubject} Paper - ${new Date().toLocaleString()}`;
+                    await saveNeetAssessment({
+                        title,
+                        subject: selectedSubject,
+                        question_ids: result.map(q => ({ id: q.id })),
+                        config: {
+                            duration,
+                            topics: selectedTopics,
+                            distribution: dist
+                        }
+                    }, user.uid);
+
+                    // Refresh list
+                    const assessments = await getNeetAssessments(selectedSubject, user.uid);
+                    setRecentAssessments(assessments);
+                }
             } else if (Array.isArray(result) && result.length === 0) {
                 toast.warning("No questions found for criteria");
             } else {
@@ -349,6 +375,32 @@ const NeetAssessmentClient = () => {
                     </div>
 
                 </div>
+
+                {/* Recent List */}
+                {recentAssessments.length > 0 && (
+                    <div className="mt-8 bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+                        <h3 className="text-lg font-bold text-slate-800 mb-4">Recent {selectedSubject} Papers</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {recentAssessments.map(paper => (
+                                <div key={paper.id} className="border border-slate-200 rounded-xl p-4 hover:shadow-md transition bg-slate-50">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <div className="bg-white p-2 rounded-lg border border-slate-200">
+                                            <FileText size={20} className="text-indigo-600" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-semibold text-slate-800 text-sm truncate w-full">{paper.title}</h4>
+                                            <span className="text-xs text-slate-500">{new Date(paper.createdAt).toLocaleDateString()}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between items-center text-xs font-medium text-slate-600 mt-2 pt-2 border-t border-slate-200">
+                                        <span>{paper.questionCount} Questions</span>
+                                        <span className="bg-white px-2 py-1 rounded border border-slate-200">{paper.config.duration} Mins</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </main>
         </div>
     );

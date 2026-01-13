@@ -231,3 +231,41 @@ export const generateNeetAssessment = async (subject, topics, subTopics = [], to
         return null; // Return null on failure
     }
 };
+
+/**
+ * Save an assessment
+ * @param {object} payload 
+ * @param {string} teacherUid 
+ * @returns {Promise<boolean>}
+ */
+export const saveNeetAssessment = async (payload, teacherUid) => {
+    try {
+        const data = { ...payload, teacherUid };
+        const response = await fetch('/api/neet/assessment/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        return response.ok;
+    } catch (error) {
+        console.error('Error saving assessment:', error);
+        return false;
+    }
+};
+
+/**
+ * Get saved assessments
+ * @param {string} subject 
+ * @param {string} teacherUid 
+ * @returns {Promise<Array>}
+ */
+export const getNeetAssessments = async (subject, teacherUid) => {
+    try {
+        const response = await fetch(`/api/neet/${subject}/assessments?teacherUid=${teacherUid}`);
+        if (!response.ok) return [];
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching assessments:', error);
+        return [];
+    }
+};
