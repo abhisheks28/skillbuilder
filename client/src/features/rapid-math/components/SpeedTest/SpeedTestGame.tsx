@@ -12,6 +12,8 @@ import { useAuth } from "@/features/auth/context/AuthContext"
 // import { signInWithPopup } from "firebase/auth"
 import { CircularProgress } from "@mui/material"
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 interface Question {
     id: number
     question: string
@@ -41,66 +43,38 @@ export function SpeedTestGame() {
     const [rankFeedback, setRankFeedback] = useState<string | null>(null)
     const [isSaving, setIsSaving] = useState(false)
     const [lastLeaderboardUpdate, setLastLeaderboardUpdate] = useState(0)
+    const [loadingQuestion, setLoadingQuestion] = useState(false)
 
-    // Specific question generation logic
-    const generateQuestion = useCallback((): Question => {
-        const ops = ["+", "-", "*", "/"]
-        const operation = ops[Math.floor(Math.random() * ops.length)]
-
-        let num1 = 0, num2 = 0, correctAnswer = 0
-
-        if (operation === "+") {
-            // 2 digit + 2 digit
-            num1 = Math.floor(Math.random() * 90) + 10 // 10-99
-            num2 = Math.floor(Math.random() * 90) + 10
-            correctAnswer = num1 + num2
-        } else if (operation === "-") {
-            // 2 digit - 2 digit (positive result)
-            num1 = Math.floor(Math.random() * 90) + 10
-            num2 = Math.floor(Math.random() * 90) + 10
-            if (num1 < num2) [num1, num2] = [num2, num1]
-            correctAnswer = num1 - num2
-        } else if (operation === "*") {
-            // Up to 20 only (ignore easy ones like 1, 10 is debatable but user said "ignore easy ones")
-            // Let's exclude 0, 1, 10
-            const valid = [2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-            num1 = valid[Math.floor(Math.random() * valid.length)]
-            num2 = valid[Math.floor(Math.random() * valid.length)]
-            correctAnswer = num1 * num2
-        } else if (operation === "/") {
-            // one number up to 100, other up to 20
-            // Prevent trivial questions like n÷n=1
-            let d, q
-            do {
-                d = Math.floor(Math.random() * 19) + 2 // Divisor 2-20
-                // Max dividend is 100. So max quotient is 100/d.
-                const maxQ = Math.floor(100 / d)
-                q = Math.floor(Math.random() * maxQ) + 1
-            } while (d === q) // Prevent n÷n=1 questions
-
-            num2 = d
-            num1 = q * d // Dividend
-            correctAnswer = q
-        }
-
-        return {
-            id: Date.now(),
-            question: `${num1} ${operation} ${num2}`,
-            correctAnswer: correctAnswer,
-            operation: operation,
-            num1: num1,
-            num2: num2
+    // Fetch question from backend
+    const fetchQuestion = useCallback(async (): Promise<Question | null> => {
+        try {
+            setLoadingQuestion(true)
+            const response = await fetch(`${API_URL}/api/rapid-math/question`)
+            if (!response.ok) {
+                console.error("Failed to fetch question")
+                return null
+            }
+            const data = await response.json()
+            return data[0]
+        } catch (error) {
+            console.error("Error fetching question:", error)
+            return null
+        } finally {
+            setLoadingQuestion(false)
         }
     }, [])
 
-    const startGame = () => {
+    const startGame = async () => {
         setStats({ totalQuestions: 0, totalTime: 0, avgTime: 0 })
-        setCurrentQuestion(generateQuestion())
-        setQuestionStartTime(Date.now())
-        setGameState("playing")
+        const firstQuestion = await fetchQuestion()
+        if (firstQuestion) {
+            setCurrentQuestion(firstQuestion)
+            setQuestionStartTime(Date.now())
+            setGameState("playing")
+        }
     }
 
-    const handleAnswerObject = (answer: number) => {
+    const handleAnswerObject = async (answer: number) => {
         const endTime = Date.now()
         const timeTaken = (endTime - questionStartTime) / 1000
 
@@ -115,8 +89,11 @@ export function SpeedTestGame() {
         })
 
         // Next question
-        setCurrentQuestion(generateQuestion())
-        setQuestionStartTime(Date.now())
+        const nextQuestion = await fetchQuestion()
+        if (nextQuestion) {
+            setCurrentQuestion(nextQuestion)
+            setQuestionStartTime(Date.now())
+        }
     }
 
     const [saveStatus, setSaveStatus] = useState<string>("idle")

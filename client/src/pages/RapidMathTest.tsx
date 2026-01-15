@@ -3,9 +3,12 @@
 import { useEffect, useState, useCallback, Suspense } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { Timer } from "@/features/rapid-math/components/timer"
-import { QuestionCard } from "@/features/rapid-math/components/question-card"
+import { SpeedTestQuestionCard } from "@/features/rapid-math/components/SpeedTest/SpeedTestQuestionCard"
+// import { QuestionCard } from "@/features/rapid-math/components/question-card"
 import { Loader2 } from "lucide-react"
 import Header from "@/pages/homepage/Header"
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 interface Question {
     id: number
@@ -43,68 +46,25 @@ function TestContent() {
     const [questionStartTime, setQuestionStartTime] = useState(Date.now())
     const [questionTimer, setQuestionTimer] = useState(0)
 
-    const getRange = (diff: string) => {
-        const ranges: any = {
-            normal: { min: 1, max: 99 },
-            easy: { min: 1, max: 9 },
-            medium: { min: 10, max: 99 },
-            hard: { min: 10, max: 999 },
-        }
-        return ranges[diff] || ranges.easy
-    }
-
-    const generateQuestion = useCallback((): Question => {
-        const range = getRange(difficulty)
-        let num1 = Math.floor(Math.random() * (range.max - range.min + 1)) + range.min
-        let num2 = Math.floor(Math.random() * (range.max - range.min + 1)) + range.min
-        const ops = ["+", "-", "*", "/"]
-        const operation = ops[Math.floor(Math.random() * ops.length)]
-
-        // For division, ensure we only generate proper divisions (no decimals)
-        if (operation === "/") {
-            const divisor = Math.floor(Math.random() * range.max) + 1
-            const quotient = Math.floor(Math.random() * (range.max / 2)) + 1
-            return {
-                id: Date.now() + Math.random(),
-                question: `${divisor * quotient} / ${divisor}`,
-                correctAnswer: quotient,
-                operation: "/",
-                num1: divisor * quotient,
-                num2: divisor,
-            }
-        }
-
-        let correctAnswer = 0
-        if (operation === "+") {
-            correctAnswer = num1 + num2
-        } else if (operation === "-") {
-            // Ensure result is always positive
-            if (num1 < num2) {
-                const temp = num1;
-                num1 = num2;
-                num2 = temp;
-            }
-            correctAnswer = num1 - num2
-        } else if (operation === "*") {
-            correctAnswer = num1 * num2
-        }
-
-        return {
-            id: Date.now() + Math.random(),
-            question: `${num1} ${operation} ${num2}`,
-            correctAnswer: correctAnswer,
-            operation: operation,
-            num1: num1,
-            num2: num2,
-        }
-    }, [difficulty])
-
     useEffect(() => {
-        const qs = Array.from({ length: totalQuestions }, () => generateQuestion())
-        setQuestions(qs)
-        setIsLoading(false)
-        setQuestionStartTime(Date.now())
-    }, [totalQuestions, generateQuestion])
+        const fetchQuestions = async () => {
+            const diffMap: Record<string, string> = { normal: "medium", easy: "easy", medium: "medium", hard: "hard" }
+            const apiDiff = diffMap[difficulty] || "medium"
+
+            try {
+                const response = await fetch(`${API_URL}/api/rapid-math/question?difficulty=${apiDiff}&count=${totalQuestions}`)
+                if (!response.ok) throw new Error("Failed to fetch")
+                const data = await response.json()
+                setQuestions(data)
+                setIsLoading(false)
+                setQuestionStartTime(Date.now())
+            } catch (error) {
+                console.error("Error loading questions:", error)
+            }
+        }
+
+        fetchQuestions()
+    }, [totalQuestions, difficulty])
 
     useEffect(() => {
         if (!timerActive) return
@@ -215,13 +175,10 @@ function TestContent() {
                 ) : (
                     currentQuestion && (
                         <div className="w-full max-w-5xl animate-in zoom-in-95 duration-500">
-                            <QuestionCard
+                            <SpeedTestQuestionCard
                                 question={currentQuestion}
                                 onSubmit={handleSubmitAnswer}
-                                onSkip={handleSkipQuestion}
                                 questionNumber={currentQuestionIndex + 1}
-                                totalQuestions={totalQuestions}
-                                secondsElapsed={questionTimer}
                             />
                         </div>
                     )
