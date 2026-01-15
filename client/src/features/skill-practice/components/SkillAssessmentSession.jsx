@@ -157,7 +157,7 @@ const getGeneratorMapForGrade = (grade) => {
     return GRADE_GENERATOR_MAP[grade] || Grade1GeneratorMap;
 };
 
-const generateQuestionsForCategory = (category, count, generatorMap) => {
+const generateQuestionsForCategory = async (category, count, generatorMap) => {
     const questions = [];
     const topics = CATEGORY_TOPIC_MAP[category] || [category];
 
@@ -198,7 +198,10 @@ const generateQuestionsForCategory = (category, count, generatorMap) => {
     for (let i = 0; i < count; i++) {
         const { topic, generator } = matchingGenerators[i % matchingGenerators.length];
         try {
-            const question = generator();
+            // Some generators might be async (like Grade 1 now)
+            const questionRaw = generator();
+            const question = questionRaw instanceof Promise ? await questionRaw : questionRaw;
+
             if (question) {
                 questions.push({
                     ...question,
@@ -248,10 +251,13 @@ const SkillAssessmentSession = () => {
 
     // Generate 5 questions on mount
     useEffect(() => {
-        const generated = generateQuestionsForCategory(category, 5, generatorMap);
-        console.log(`[SkillAssessmentSession] Generated ${generated.length} questions for ${category} (${grade})`);
-        setQuestionPaper(generated);
-        setTimeout(() => setIsInitializing(false), 1000);
+        const loadQuestions = async () => {
+            const generated = await generateQuestionsForCategory(category, 5, generatorMap);
+            console.log(`[SkillAssessmentSession] Generated ${generated.length} questions for ${category} (${grade})`);
+            setQuestionPaper(generated);
+            setTimeout(() => setIsInitializing(false), 1000);
+        };
+        loadQuestions();
     }, [category, generatorMap]);
 
     const getTimeTaken = (time) => {

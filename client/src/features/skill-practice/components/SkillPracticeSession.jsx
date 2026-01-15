@@ -166,7 +166,7 @@ const getGeneratorMapForGrade = (grade) => {
  * @param {number} count - Number of questions to generate
  * @param {object} generatorMap - Map of topic to generator functions
  */
-const generateQuestionsForCategory = (category, count, generatorMap) => {
+const generateQuestionsForCategory = async (category, count, generatorMap) => {
     const questions = [];
 
     // Get relevant topics for this category
@@ -212,7 +212,10 @@ const generateQuestionsForCategory = (category, count, generatorMap) => {
     for (let i = 0; i < count; i++) {
         const { topic, generator } = matchingGenerators[i % matchingGenerators.length];
         try {
-            const question = generator();
+            // Some generators might be async (like Grade 1 now)
+            const questionRaw = generator();
+            const question = questionRaw instanceof Promise ? await questionRaw : questionRaw;
+
             if (question) {
                 questions.push({
                     ...question,
@@ -255,9 +258,12 @@ const SkillPracticeSession = () => {
 
     // Generate 10 questions on mount
     useEffect(() => {
-        const generated = generateQuestionsForCategory(category, 10, generatorMap);
-        console.log(`[SkillPracticeSession] Generated ${generated.length} questions for ${category} (${grade})`);
-        setQuestions(generated);
+        const loadQuestions = async () => {
+            const generated = await generateQuestionsForCategory(category, 10, generatorMap);
+            console.log(`[SkillPracticeSession] Generated ${generated.length} questions for ${category} (${grade})`);
+            setQuestions(generated);
+        };
+        loadQuestions();
     }, [category, generatorMap]);
 
     // Log practice session when user exits or completes

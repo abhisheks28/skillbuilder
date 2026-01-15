@@ -11,8 +11,8 @@ import { QuizSessionContext } from "@/features/quiz/context/QuizSessionContext";
 import { toast } from "react-toastify";
 import { Trophy, Star } from "lucide-react";
 import getRandomInt from "@/utils/workload/GetRandomInt";
-import GetGrade1Question from "@/questionBook/Grade1/GetGrade1Question";
-import GetGrade2Question from "@/questionBook/Grade2/GetGrade2Question";
+import GetGrade1Question, { fetchAllGrade1Questions } from "@/questionBook/Grade1/GetGrade1Question";
+import GetGrade2Question, { fetchAllGrade2Questions } from "@/questionBook/Grade2/GetGrade2Question";
 import GetGrade3Question from "@/questionBook/Grade3/GetGrade3Question";
 import GetGrade4Question from "@/questionBook/Grade4/GetGrade4Question";
 import GetGrade5Question from "@/questionBook/Grade5/GetGrade5Question";
@@ -44,6 +44,7 @@ const QuizClient = () => {
     const [isInitializing, setIsInitializing] = useState(true); // Ensures loading screen shows on first load
     const [showIntro, setShowIntro] = useState(false);
     const [attemptCount, setAttemptCount] = useState(0);
+    const [generationStarted, setGenerationStarted] = useState(false);
 
     // Name prompt dialog state
     const [nameDialogOpen, setNameDialogOpen] = useState(false);
@@ -216,100 +217,86 @@ const QuizClient = () => {
     }, [activeQuestionIndex]);
 
     useEffect(() => {
-        let gradeQuestionPaper = null;
-
-        if (!quizContext.userDetails) {
-            return
-        }
-
-        // If we already have a questionPaper in context (e.g. after refresh), reuse it
-        if (quizContext.questionPaper && Array.isArray(quizContext.questionPaper) && quizContext.questionPaper.length > 0) {
-            const clean = quizContext.questionPaper.filter(q => q);
-            setQuestionPaper(clean);
+        if (!quizContext.userDetails || quizContext.questionPaper?.length > 0 || generationStarted) {
             return;
         }
 
         const userGrade = quizContext.userDetails.activeChild?.grade || quizContext.userDetails.grade;
 
-        switch (userGrade) {
-            case "Grade 1": {
-                gradeQuestionPaper = { ...GetGrade1Question };
-                break;
-            }
-            case "Grade 2": {
-                gradeQuestionPaper = { ...GetGrade2Question };
-                break;
-            }
-            case "Grade 3": {
-                gradeQuestionPaper = { ...GetGrade3Question };
-                break;
-            }
-            case "Grade 4": {
-                gradeQuestionPaper = { ...GetGrade4Question };
-                break;
-            }
-            case "Grade 5": {
-                gradeQuestionPaper = { ...GetGrade5Question };
-                break;
-            }
-            case "Grade 6": {
-                gradeQuestionPaper = { ...GetGrade6Question };
-                break;
-            }
-            case "Grade 7": {
-                gradeQuestionPaper = { ...GetGrade7Question };
-                break;
-            }
-            case "Grade 8": {
-                gradeQuestionPaper = { ...GetGrade8Question };
-                break;
-            }
-            case "Grade 9": {
-                gradeQuestionPaper = { ...GetGrade9Question };
-                break;
-            }
-            case "Grade 10":
-            case "Grade 11":
-            case "Grade 12": {
-                gradeQuestionPaper = { ...GetGrade10Question };
-                break;
-            }
-            default: {
-                gradeQuestionPaper = { ...GetGrade1Question };
-                break;
-            }
-        }
+        const generatePaper = async () => {
+            setGenerationStarted(true);
+            let generatedPaper = [];
 
-        const generatedPaper = [];
-        // Dynamically generate questions based on available keys in gradeQuestionPaper
-        // We assume keys are q1, q2, q3, etc.
-        let qIndex = 1;
-        while (gradeQuestionPaper[`q${qIndex}`]) {
-            const questions = gradeQuestionPaper[`q${qIndex}`];
-            if (questions && questions.length > 0) {
-                const randomInt = getRandomInt(0, questions.length - 1);
-                generatedPaper.push(questions[randomInt]);
-            }
-            qIndex++;
-        }
-        // Filter out any undefined questions to avoid crashes
-        const cleanPaper = generatedPaper.filter(q => q);
-        setQuestionPaper(cleanPaper);
-        setQuizContext(state => ({ ...state, questionPaper: cleanPaper }));
+            if (userGrade === "Grade 1" || userGrade === "Grade 2") {
+                try {
+                    const gradeNum = userGrade.split(" ")[1];
+                    const fetchFunc = gradeNum === "1" ? fetchAllGrade1Questions : fetchAllGrade2Questions;
+                    const allQuestions = await fetchFunc(5); // 5 per topic for assessment
+                    if (allQuestions) {
+                        let qIndex = 1;
+                        while (allQuestions[`q${qIndex}`]) {
+                            const qs = allQuestions[`q${qIndex}`];
+                            if (qs && qs.length > 0) {
+                                const randomInt = getRandomInt(0, qs.length - 1);
+                                generatedPaper.push({ ...qs[randomInt], userAnswer: null });
+                            }
+                            qIndex++;
+                        }
+                    }
+                } catch (err) {
+                    console.error(`Error fetching ${userGrade} paper:`, err);
+                }
+            } else {
+                let gradeQuestionPaper = null;
+                switch (userGrade) {
+                    case "Grade 2": gradeQuestionPaper = { ...GetGrade2Question }; break;
+                    case "Grade 3": gradeQuestionPaper = { ...GetGrade3Question }; break;
+                    case "Grade 4": gradeQuestionPaper = { ...GetGrade4Question }; break;
+                    case "Grade 5": gradeQuestionPaper = { ...GetGrade5Question }; break;
+                    case "Grade 6": gradeQuestionPaper = { ...GetGrade6Question }; break;
+                    case "Grade 7": gradeQuestionPaper = { ...GetGrade7Question }; break;
+                    case "Grade 8": gradeQuestionPaper = { ...GetGrade8Question }; break;
+                    case "Grade 9": gradeQuestionPaper = { ...GetGrade9Question }; break;
+                    case "Grade 10":
+                    case "Grade 11":
+                    case "Grade 12": gradeQuestionPaper = { ...GetGrade10Question }; break;
+                    default: gradeQuestionPaper = { ...GetGrade1Question }; break;
+                }
 
-        try {
-            if (typeof window !== "undefined" && quizContext.userDetails && questionPaper && questionPaper.length > 0) {
-                window.localStorage.setItem("quizSession", JSON.stringify({
-                    userDetails: quizContext.userDetails,
-                    questionPaper: generatedPaper,
-                    activeQuestionIndex: 0,
-                    remainingTime: 1800
-                }));
+                if (gradeQuestionPaper) {
+                    let qIndex = 1;
+                    while (gradeQuestionPaper[`q${qIndex}`]) {
+                        const questions = gradeQuestionPaper[`q${qIndex}`];
+                        if (questions && questions.length > 0) {
+                            const randomInt = getRandomInt(0, questions.length - 1);
+                            generatedPaper.push(questions[randomInt]);
+                        }
+                        qIndex++;
+                    }
+                }
             }
-        } catch (e) {
-            // ignore
-        }
-    }, [quizContext, setQuizContext])
+
+            // Filter and set
+            const cleanPaper = generatedPaper.filter(q => q);
+            if (cleanPaper.length > 0) {
+                setQuestionPaper(cleanPaper);
+                setQuizContext(state => ({ ...state, questionPaper: cleanPaper }));
+
+                try {
+                    if (typeof window !== "undefined") {
+                        window.localStorage.setItem("quizSession", JSON.stringify({
+                            userDetails: quizContext.userDetails,
+                            questionPaper: cleanPaper,
+                            activeQuestionIndex: 0,
+                            remainingTime: 1800
+                        }));
+                    }
+                } catch (e) { }
+            }
+        };
+
+        generatePaper();
+    }, [quizContext.userDetails, quizContext.questionPaper, generationStarted, setQuizContext]);
 
     useEffect(() => {
         if (!hydrationDone) return;

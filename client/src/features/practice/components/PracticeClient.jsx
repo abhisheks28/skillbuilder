@@ -9,7 +9,7 @@ import SATInstructions from "@/components/SAT/SATInstructions.component";
 
 const GRADE_LOADERS = {
     1: () => import('@/questionBook/Grade1/GetGrade1Question'),
-    2: () => import('@/questionBook/Grade2/GetGrade2Question.mjs'),
+    2: () => import('@/questionBook/Grade2/GetGrade2Question'),
     3: () => import('@/questionBook/Grade3/GetGrade3Question.mjs'),
     4: () => import('@/questionBook/Grade4/GetGrade4Question.mjs'),
     5: () => import('@/questionBook/Grade5/GetGrade5Question.mjs'),
@@ -61,14 +61,33 @@ const PracticeClientContent = () => {
 
                 // Flatten the Question Book into a Session Paper
                 const generatedPaper = [];
-                let qIndex = 1;
-                while (questionBook[`q${qIndex}`]) {
-                    const qs = questionBook[`q${qIndex}`];
-                    if (qs && qs.length > 0) {
-                        const randomInt = getRandomInt(0, qs.length - 1);
-                        generatedPaper.push({ ...qs[randomInt], userAnswer: null });
+
+                if (grade === 1 || grade === 2) {
+                    // For Grade 1 and 2, we now fetch all questions from the backend
+                    const fetchFuncName = `fetchAllGrade${grade}Questions`;
+                    const fetchAllFunc = module[fetchFuncName];
+                    const allQuestions = await fetchAllFunc(5); // Get 5 per topic
+                    if (allQuestions) {
+                        let qIndex = 1;
+                        while (allQuestions[`q${qIndex}`]) {
+                            const qs = allQuestions[`q${qIndex}`];
+                            if (qs && qs.length > 0) {
+                                const randomInt = getRandomInt(0, qs.length - 1);
+                                generatedPaper.push({ ...qs[randomInt], userAnswer: null });
+                            }
+                            qIndex++;
+                        }
                     }
-                    qIndex++;
+                } else {
+                    let qIndex = 1;
+                    while (questionBook[`q${qIndex}`]) {
+                        const qs = questionBook[`q${qIndex}`];
+                        if (qs && qs.length > 0) {
+                            const randomInt = getRandomInt(0, qs.length - 1);
+                            generatedPaper.push({ ...qs[randomInt], userAnswer: null });
+                        }
+                        qIndex++;
+                    }
                 }
 
                 if (generatedPaper.length === 0) {

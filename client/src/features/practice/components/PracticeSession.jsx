@@ -161,19 +161,29 @@ const PracticeSession = ({
         // No op for palette now
     };
 
-    const handleRepeat = (index) => {
-        // Regenerate question at this index
-        const currentQ = questions[index];
-        // Pass generatorMap to the helper
-        const newQ = regenerateQuestion(currentQ, generatorMap);
+    const handleRepeat = async (index) => {
+        try {
+            // Regenerate question at this index
+            const currentQ = questions[index];
+            // Pass generatorMap to the helper
+            const newQ = await regenerateQuestion(currentQ, generatorMap);
 
-        if (newQ) {
-            const updatedQuestions = [...questions];
-            updatedQuestions[index] = { ...newQ, userAnswer: null }; // Reset answer
-            setQuestions(updatedQuestions);
-        } else {
-            console.warn("Could not regenerate question", currentQ);
-            toast.error("Could not regenerate this question.");
+            if (newQ && newQ.type) {
+                const updatedQuestions = [...questions];
+                // Add a unique ID or timestamp to ensure the key changes and component remounts
+                updatedQuestions[index] = {
+                    ...newQ,
+                    userAnswer: null,
+                    regeneratedAt: Date.now()
+                };
+                setQuestions(updatedQuestions);
+            } else {
+                console.warn("Could not regenerate question", currentQ);
+                toast.error("Could not regenerate this question.");
+            }
+        } catch (error) {
+            console.error("Error in handleRepeat:", error);
+            toast.error("Failed to regenerate question due to an error.");
         }
     };
 
@@ -229,11 +239,11 @@ const PracticeSession = ({
 
                     {currentQuestion.type === "mcq" && (
                         <PracticeMCQ
-                            key={`${activeQuestionIndex}-${currentQuestion.question}`}
+                            key={`${activeQuestionIndex}-${currentQuestion.regeneratedAt || currentQuestion.question}`}
                             activeQuestionIndex={activeQuestionIndex}
                             question={currentQuestion.question}
                             topic={currentQuestion.topic}
-                            options={currentQuestion.options}
+                            options={currentQuestion.options || []}
                             answer={currentQuestion.answer}
                             image={currentQuestion.image}
                             onNext={handleNext}
@@ -245,13 +255,13 @@ const PracticeSession = ({
                     )}
                     {currentQuestion.type === "userInput" && (
                         <PracticeUserInput
-                            key={`${activeQuestionIndex}-${currentQuestion.question}`}
+                            key={`${activeQuestionIndex}-${currentQuestion.regeneratedAt || currentQuestion.question}`}
                             activeQuestionIndex={activeQuestionIndex}
                             question={currentQuestion.question}
                             topic={currentQuestion.topic}
                             answer={currentQuestion.answer}
                             image={currentQuestion.image}
-                            grade={gradeTitle} // Pass title or raw grade number? Component might use it for keypad?
+                            grade={gradeTitle}
                             keypadMode={currentQuestion.keypadMode}
                             onNext={handleNext}
                             onCorrect={() => handleCorrectAnswer(activeQuestionIndex)}
@@ -262,7 +272,7 @@ const PracticeSession = ({
                     )}
                     {currentQuestion.type === "tableInput" && (
                         <PracticeTableInput
-                            key={`${activeQuestionIndex}-${currentQuestion.topic}`}
+                            key={`${activeQuestionIndex}-${currentQuestion.regeneratedAt || currentQuestion.topic}`}
                             activeQuestionIndex={activeQuestionIndex}
                             question={currentQuestion}
                             topic={currentQuestion.topic}
@@ -278,7 +288,7 @@ const PracticeSession = ({
                     )}
                     {currentQuestion.type === "factorTree" && (
                         <PracticeFactorTree
-                            key={`${activeQuestionIndex}-${currentQuestion.topic}`}
+                            key={`${activeQuestionIndex}-${currentQuestion.regeneratedAt || currentQuestion.topic}`}
                             activeQuestionIndex={activeQuestionIndex}
                             question={currentQuestion}
                             topic={currentQuestion.topic}
@@ -288,6 +298,15 @@ const PracticeSession = ({
                             onRepeat={() => handleRepeat(activeQuestionIndex)}
                             isLastQuestion={activeQuestionIndex === questions.length - 1}
                         />
+                    )}
+
+                    {/* Fallback for unknown or malformed question types */}
+                    {!["mcq", "userInput", "tableInput", "factorTree"].includes(currentQuestion.type) && (
+                        <div className={Styles.error}>
+                            <h3>Unsupported question type: {currentQuestion.type || "unknown"}</h3>
+                            <p>Please try skipping this question or exiting practice.</p>
+                            <Button onClick={() => handleRepeat(activeQuestionIndex)}>Try Again</Button>
+                        </div>
                     )}
                 </div>
             </div>
