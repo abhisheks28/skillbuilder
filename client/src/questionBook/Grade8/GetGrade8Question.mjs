@@ -65,8 +65,8 @@ import {
 } from '../Grade10/grade10Generators.mjs';
 
 import {
-    generateFactorTree,
-} from '../Grade5/grade5Generators.mjs';
+    generateFactorTreeBackend as generateFactorTree,
+} from '../Grade5/GetGrade5Question.mjs';
 
 // const Grade8Questions = {
 //     q1: generate(generateNaturalWholeNumbers),            // Grade 7 Q1

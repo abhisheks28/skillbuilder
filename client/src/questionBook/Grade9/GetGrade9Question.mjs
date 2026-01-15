@@ -56,8 +56,8 @@ import {
 
 
 import {
-    generateFactorTree,
-} from '../Grade5/grade5Generators.mjs';
+    generateFactorTreeBackend as generateFactorTree,
+} from '../Grade5/GetGrade5Question.mjs';
 
 const generate = (generator, count = 10) => {
     return Array.from({ length: count }, () => generator());
