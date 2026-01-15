@@ -7,7 +7,7 @@ import uuid
 router = APIRouter()
 
 
-from app.models.schemas import UserRegisterRequest, LoginRequest, AdminLoginRequest
+from app.features.auth.schemas import UserRegisterRequest, LoginRequest, AdminLoginRequest
 
 @router.post("/register")
 async def register(request: UserRegisterRequest):
@@ -149,7 +149,7 @@ async def login(request: LoginRequest):
             }
         }
 
-from app.models.schemas import GoogleLoginRequest
+from app.features.auth.schemas import GoogleLoginRequest
 
 @router.post("/google")
 async def google_login(request: GoogleLoginRequest):

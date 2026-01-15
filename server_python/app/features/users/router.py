@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Path, Body
 from app.core.database import get_db_pool
-from app.models.schemas import StudentCreate, TeacherCreate, ParentCreate, GuestCreate
+from app.features.users.schemas import StudentCreate, TeacherCreate, ParentCreate, GuestCreate
 from typing import Dict, Any
 
 router = APIRouter()

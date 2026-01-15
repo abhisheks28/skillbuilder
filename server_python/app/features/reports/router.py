@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, Query, Body
 from app.core.database import get_db_pool
 from typing import Optional, Dict, Any
 import json
+from fastapi import APIRouter, HTTPException, Body
 
 router = APIRouter()
 
