@@ -41,3 +41,14 @@ CREATE TABLE IF NOT EXISTS neet_assessments (
     created_by INTEGER REFERENCES users(user_id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Rapid Math Scores
+CREATE TABLE IF NOT EXISTS rapid_math_scores (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+    measure_value NUMERIC,
+    metric_type VARCHAR(50), 
+    difficulty VARCHAR(20),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+

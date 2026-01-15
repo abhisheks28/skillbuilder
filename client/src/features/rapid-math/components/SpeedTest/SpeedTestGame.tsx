@@ -99,21 +99,39 @@ export function SpeedTestGame() {
     const [saveStatus, setSaveStatus] = useState<string>("idle")
 
     const saveScore = async (currentUser: any) => {
-        console.log("Attempting to save score...", {
-            uid: currentUser?.uid,
-            questions: stats.totalQuestions,
-            avgTime: stats.avgTime
-        })
-
-        // Mock save implementation since Firebase is removed
-        setSaveStatus("saved (mock)")
-        setRankFeedback("Leaderboard temporarily disabled during migration.")
-
-        /* 
-        // Firebase Logic Removed for Migration
         if (!currentUser) return;
-        // ... previous saving logic ...
-        */
+        setIsSaving(true)
+        setSaveStatus("saving")
+
+        try {
+            const response = await fetch(`${API_URL}/api/rapid-math/score?uid=${currentUser.uid}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    measure_value: stats.avgTime,
+                    metric_type: "avg_time",
+                    difficulty: "medium",
+                    name: activeChild ? activeChild.name : user?.displayName || "Unknown"
+                })
+            })
+
+            if (response.ok) {
+                setSaveStatus("saved")
+                setRankFeedback("Score saved! Check the leaderboard.")
+                setLastLeaderboardUpdate(Date.now())
+            } else {
+                setSaveStatus("error")
+                setRankFeedback("Failed to save score. Please try again.")
+            }
+        } catch (error) {
+            console.error("Error saving score:", error)
+            setSaveStatus("error")
+            setRankFeedback("Error saving score.")
+        } finally {
+            setIsSaving(false)
+        }
     }
 
 
