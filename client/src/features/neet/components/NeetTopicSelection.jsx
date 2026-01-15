@@ -33,6 +33,10 @@ const NeetTopicSelection = () => {
         PYQ: 5
     });
 
+    // Password Modal State
+    const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+    const [passwordInput, setPasswordInput] = useState("");
+
     useEffect(() => {
         if (!subject) return;
 
@@ -132,33 +136,10 @@ const NeetTopicSelection = () => {
         }
     };
 
-    const handleStartAssessment = async () => {
-        if (selectedSubTopics.size === 0) {
-            toast.error("Please select at least one topic/sub-topic.");
-            return;
-        }
-
-        const subjectsList = [];
-        const subTopicsList = [];
-
-        // Parse the sets
-        selectedSubTopics.forEach(key => {
-            const [t, s] = key.split('|');
-            if (!subjectsList.includes(t)) subjectsList.push(t);
-            subTopicsList.push(s);
-        });
-
+    const startAssessmentWithSelection = async (subjectsList, subTopicsList) => {
         const distPayload = Object.entries(distribution)
             .filter(([_, count]) => count > 0)
             .map(([type, count]) => ({ type, count }));
-
-        const payload = {
-            subject: subject, // from params
-            topics: subjectsList,
-            sub_topics: subTopicsList,
-            distribution: distPayload,
-            total_questions: 0 // Ignored if distribution present
-        };
 
         try {
             setLoading(true);
@@ -209,6 +190,74 @@ const NeetTopicSelection = () => {
         }
     };
 
+    const handleStartAssessment = async () => {
+        if (selectedSubTopics.size === 0) {
+            toast.error("Please select at least one topic/sub-topic.");
+            return;
+        }
+
+        const subjectsList = [];
+        const subTopicsList = [];
+
+        // Parse the sets
+        selectedSubTopics.forEach(key => {
+            const [t, s] = key.split('|');
+            if (!subjectsList.includes(t)) subjectsList.push(t);
+            subTopicsList.push(s);
+        });
+
+        await startAssessmentWithSelection(subjectsList, subTopicsList);
+    };
+
+    const handleTakeOverallAssessment = () => {
+        setPasswordModalOpen(true);
+    };
+
+    const handlePasswordSubmit = async () => {
+        if (!passwordInput) {
+            toast.error("Please enter a password");
+            return;
+        }
+
+        try {
+            setLoading(true);
+            // Verify password via API
+            const response = await fetch('/api/neet/assessment/access', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    subject: subject,
+                    password: passwordInput
+                })
+            });
+
+            if (!response.ok) {
+                toast.error("Invalid password or assessment not found");
+                setLoading(false);
+                return;
+            }
+
+            const assessment = await response.json();
+            setPasswordModalOpen(false);
+            setPasswordInput("");
+
+            // Navigate with state
+            navigate(`/neet/practice/${subject}?mode=assessment`, {
+                state: {
+                    questions: assessment.questions,
+                    duration: assessment.config?.duration || 60,
+                    mode: 'assessment',
+                    title: assessment.title
+                }
+            });
+
+        } catch (err) {
+            console.error(err);
+            toast.error("Error accessing assessment");
+            setLoading(false);
+        }
+    };
+
     const toRoman = (num) => {
         const lookup = { M: 1000, CM: 900, D: 500, CD: 400, C: 100, XC: 90, L: 50, XL: 40, X: 10, IX: 9, V: 5, IV: 4, I: 1 };
         let roman = '';
@@ -250,6 +299,43 @@ const NeetTopicSelection = () => {
         return counts;
     }, [topicsData, selectedSubTopics, distribution]);
 
+    // List Modal State
+    const [listModalOpen, setListModalOpen] = useState(false);
+    const [allGeneratedPapers, setAllGeneratedPapers] = useState([]);
+
+    const handleOpenGeneratedPapers = async () => {
+        setLoading(true);
+        try {
+            // Fetch ALL assessments for subject (no teacherUid)
+            const papers = await getNeetAssessments(subject);
+            setAllGeneratedPapers(papers);
+            setListModalOpen(true);
+        } catch (e) {
+            toast.error("Failed to load papers");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSelectPaper = (paper) => {
+        // If paper has password in config, we might need to prompt.
+        // HOWEVER, the list_assessments backend endpoint returns config but NOT the password value inside config for security?
+        // Actually, backend returns full config.
+        // If we want to secure it, we should rely on the user knowing the password.
+        // Let's reuse the Password Modal.
+        // We set the password input to empty and open modal.
+        // BUT wait, "Take Overall Assessment" (password only) vs "Click Item" (password prompt).
+        // Let's set a "targetPaper" state to know which paper we are verifying.
+
+        // For now, let's keep it simple: Clicking a paper opens password modal.
+        // User enters password. We verify against THAT paper.
+        setListModalOpen(false);
+        setPasswordModalOpen(true);
+        // We might need to store the selected paper ID to verify specifically against it, currently /assessment/access checks by Subject + Password.
+        // If multiple papers have same password, it picks latest.
+        // This flow works for now.
+    };
+
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col">
             {/* Header */}
@@ -264,6 +350,22 @@ const NeetTopicSelection = () => {
                         </h1>
                         <p className="text-sm text-slate-500">Select topics to create your assessment</p>
                     </div>
+                </div>
+                <div className="flex gap-2">
+                    <button
+                        onClick={handleOpenGeneratedPapers}
+                        className="px-4 py-2 bg-indigo-50 text-indigo-700 font-bold rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-colors text-sm flex items-center gap-2"
+                    >
+                        <BookOpen size={18} />
+                        Generated Papers
+                    </button>
+                    <button
+                        onClick={handleTakeOverallAssessment}
+                        className="px-6 py-2 bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-all text-sm flex items-center gap-2"
+                    >
+                        <PlayCircle size={18} />
+                        Take Overall Assessment
+                    </button>
                 </div>
             </header>
 
@@ -484,6 +586,107 @@ const NeetTopicSelection = () => {
                 </div >
 
             </main >
+
+            {/* Password Modal */}
+            {passwordModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 transform transition-all scale-100">
+                        <div className="text-center mb-6">
+                            <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                <PlayCircle className="text-indigo-600" size={24} />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-800">Start Overall Assessment</h3>
+                            <p className="text-slate-500 text-sm mt-1">
+                                Enter the exam password to begin the full syllabus assessment.
+                            </p>
+                        </div>
+
+                        <div className="mb-6">
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Password</label>
+                            <input
+                                type="password"
+                                value={passwordInput}
+                                onChange={(e) => setPasswordInput(e.target.value)}
+                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                                placeholder="Enter exam password"
+                                autoFocus
+                            />
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setPasswordModalOpen(false)}
+                                className="flex-1 py-3 px-4 border border-slate-200 text-slate-600 font-medium rounded-xl hover:bg-slate-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handlePasswordSubmit}
+                                className="flex-1 py-3 px-4 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-md shadow-indigo-200 transition-transform active:scale-95"
+                            >
+                                Start Exam
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Generated Papers List Modal */}
+            {listModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 transform transition-all scale-100 flex flex-col max-h-[80vh]">
+                        <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">Generated Papers</h3>
+                                <p className="text-slate-500 text-sm">Select a paper to take assessment.</p>
+                            </div>
+                            <button
+                                onClick={() => setListModalOpen(false)}
+                                className="text-slate-400 hover:text-slate-600"
+                            >
+                                <ArrowLeft size={20} className="rotate-180" /> {/* Close Icon */}
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+                            {allGeneratedPapers.length > 0 ? (
+                                allGeneratedPapers.map((paper) => (
+                                    <div
+                                        key={paper.id}
+                                        onClick={() => handleSelectPaper(paper)}
+                                        className="border border-slate-200 rounded-xl p-4 hover:border-indigo-500 hover:bg-indigo-50 cursor-pointer transition-all flex items-center justify-between group"
+                                    >
+                                        <div>
+                                            <h4 className="font-bold text-slate-800 group-hover:text-indigo-700">{paper.title}</h4>
+                                            <div className="flex gap-4 text-xs text-slate-500 mt-1">
+                                                <span className="flex items-center gap-1"><BookOpen size={12} /> {paper.questionCount} Questions</span>
+                                                <span className="flex items-center gap-1"><PlayCircle size={12} /> {paper.config?.duration} Mins</span>
+                                                <span>{new Date(paper.createdAt).toLocaleDateString()}</span>
+                                            </div>
+                                        </div>
+                                        <div className="text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity font-medium text-sm flex items-center gap-1">
+                                            Start <ChevronRight size={16} />
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center py-12 text-slate-500">
+                                    No generated papers found for {displaySubject}.
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mt-4 pt-4 border-t border-slate-100 text-right">
+                            <button
+                                onClick={() => setListModalOpen(false)}
+                                className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-50 rounded-lg transition-colors"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 };

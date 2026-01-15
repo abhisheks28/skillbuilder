@@ -408,6 +408,56 @@ async def save_assessment(
         
     return {"success": True}
 
+@router.get("/assessment/{id}")
+async def get_assessment_by_id(id: int):
+    import json
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT id, title, subject, question_ids, config, created_at
+            FROM neet_assessments
+            WHERE id = $1
+        """, id)
+        
+        if not row:
+            raise HTTPException(404, "Assessment not found")
+            
+        # Parse question_ids
+        q_id_list = json.loads(row['question_ids'])
+        ids = [int(q['id']) for q in q_id_list if 'id' in q]
+        
+        questions = []
+        if ids:
+            q_query = "SELECT id, question_content, topic, sub_topic, question_type FROM neet_questions WHERE id = ANY($1::int[])"
+            q_rows = await conn.fetch(q_query, ids)
+            
+            # Helper to map by ID to preserve order if needed, or just list
+            # Usually order in paper matters if shuffled, here we just show them.
+            
+            for r in q_rows:
+                try:
+                    q_data = json.loads(r['question_content'])
+                    q_data['id'] = r['id']
+                    q_data['topic'] = r['topic']
+                    q_data['sub_topic'] = r['sub_topic']
+                    q_data['questionType'] = r['question_type']
+                    
+                    if q_data.get('question'):
+                         q_data['question'] = q_data['question'].replace('\n', '<br/>')
+                    
+                    questions.append(q_data)
+                except:
+                    continue
+
+        return {
+            "id": row['id'],
+            "title": row['title'],
+            "subject": row['subject'],
+            "questions": questions,
+            "config": json.loads(row['config']),
+            "createdAt": row['created_at'].isoformat()
+        }
+
 @router.get("/{subject}/assessments")
 async def list_assessments(subject: str, teacherUid: Optional[str] = Query(None)):
     pool = await get_db_pool()
@@ -445,6 +495,73 @@ async def list_assessments(subject: str, teacherUid: Optional[str] = Query(None)
             })
             
     return results
+
+@router.post("/assessment/access")
+async def access_assessment(
+    subject: str = Body(...),
+    password: str = Body(...)
+):
+    """
+    Find an assessment by subject and matching password (case-sensitive) within config.
+    """
+    import json
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        # Search for assessments with matching subject 
+        # Postgres JSONB query: config->>'password' = $2
+        query = """
+            SELECT id, title, subject, question_ids, config, created_at
+            FROM neet_assessments
+            WHERE LOWER(subject) = LOWER($1)
+            AND config->>'password' = $2
+            ORDER BY created_at DESC
+            LIMIT 1
+        """
+        row = await conn.fetchrow(query, subject, password)
+        
+        if not row:
+            raise HTTPException(404, "Invalid password or assessment not found")
+            
+        # Parse question_ids to fetch actual questions
+        q_id_list = json.loads(row['question_ids'])
+        # Extract IDs
+        ids = [int(q['id']) for q in q_id_list if 'id' in q]
+        
+        if not ids:
+             return {
+                "id": row['id'],
+                "title": row['title'],
+                "questions": [],
+                "config": json.loads(row['config'])
+            }
+            
+        # Fetch full question details
+        q_query = "SELECT id, question_content, topic, sub_topic, question_type FROM neet_questions WHERE id = ANY($1::int[])"
+        q_rows = await conn.fetch(q_query, ids)
+        
+        questions = []
+        for r in q_rows:
+            try:
+                q_data = json.loads(r['question_content'])
+                q_data['id'] = r['id']
+                q_data['topic'] = r['topic']
+                q_data['sub_topic'] = r['sub_topic']
+                q_data['questionType'] = r['question_type']
+                
+                # Apply normalization (same as generate)
+                if q_data.get('question'):
+                     q_data['question'] = q_data['question'].replace('\n', '<br/>')
+                
+                questions.append(q_data)
+            except:
+                continue
+
+        return {
+            "id": row['id'],
+            "title": row['title'],
+            "questions": questions,
+            "config": json.loads(row['config'])
+        }
 
 @router.delete("/{subject}/topic")
 async def delete_topic_questions(

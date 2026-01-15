@@ -109,7 +109,7 @@ const NeetPracticeClient = () => {
 
                 const userDetails = {
                     name: studentName,
-                    grade: `NEET ${subject}`,
+                    grade: location.state?.title || `NEET ${subject}`,
                     userKey: userKey,
                     childId: childId,
                     activeChildId: childId,

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/features/auth/context/AuthContext';
-import { getNeetTopics, generateNeetAssessment, saveNeetAssessment, getNeetAssessments } from '@/services/neetQuestionService';
+import { getNeetTopics, generateNeetAssessment, saveNeetAssessment, getNeetAssessments, getNeetAssessmentById } from '@/services/neetQuestionService';
 import { toast } from 'react-toastify';
 import { ArrowLeft, BookOpen, Clock, FileText, Printer, CheckSquare, RefreshCw, File } from 'lucide-react';
 
@@ -29,6 +29,7 @@ const NeetAssessmentClient = () => {
     // Result state
     const [generatedPaper, setGeneratedPaper] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [fetchingRecent, setFetchingRecent] = useState(false);
 
     useEffect(() => {
         const fetchTopics = async () => {
@@ -37,8 +38,16 @@ const NeetAssessmentClient = () => {
             setSelectedTopics([]); // Reset on subject change
 
             if (user?.uid) {
-                const assessments = await getNeetAssessments(selectedSubject, user.uid);
-                setRecentAssessments(assessments);
+                setFetchingRecent(true);
+                try {
+                    // Fetch ALL assessments (pass null/undefined for teacherUid) to see papers from all teachers
+                    const assessments = await getNeetAssessments(selectedSubject);
+                    setRecentAssessments(assessments);
+                } catch (error) {
+                    console.error("Failed to load assessments", error);
+                } finally {
+                    setFetchingRecent(false);
+                }
             }
         };
         fetchTopics();
@@ -111,13 +120,16 @@ const NeetAssessmentClient = () => {
                         config: {
                             duration,
                             topics: selectedTopics,
-                            distribution: dist
+                            distribution: dist,
+                            password: password // Save password
                         }
                     }, user.uid);
 
-                    // Refresh list
-                    const assessments = await getNeetAssessments(selectedSubject, user.uid);
+                    // Refresh list - Fetch ALL
+                    setFetchingRecent(true);
+                    const assessments = await getNeetAssessments(selectedSubject);
                     setRecentAssessments(assessments);
+                    setFetchingRecent(false);
                 }
             } else if (Array.isArray(result) && result.length === 0) {
                 toast.warning("No questions found for criteria");
@@ -377,30 +389,69 @@ const NeetAssessmentClient = () => {
                 </div>
 
                 {/* Recent List */}
-                {recentAssessments.length > 0 && (
-                    <div className="mt-8 bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-                        <h3 className="text-lg font-bold text-slate-800 mb-4">Recent {selectedSubject} Papers</h3>
+                <div className="mt-8 bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+                    <h3 className="text-lg font-bold text-slate-800 mb-4">Recent {selectedSubject} Papers</h3>
+
+                    {fetchingRecent && (
+                        <div className="flex justify-center py-8">
+                            <RefreshCw className="animate-spin text-indigo-500" size={24} />
+                            <span className="ml-2 text-slate-500">Loading recent papers...</span>
+                        </div>
+                    )}
+
+                    {!fetchingRecent && recentAssessments.length === 0 && (
+                        <div className="text-center py-8 text-slate-400 italic border border-dashed border-slate-200 rounded-xl">
+                            No recent papers found for {selectedSubject}.<br />
+                            Generated papers will appear here.
+                        </div>
+                    )}
+
+                    {!fetchingRecent && recentAssessments.length > 0 && (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             {recentAssessments.map(paper => (
-                                <div key={paper.id} className="border border-slate-200 rounded-xl p-4 hover:shadow-md transition bg-slate-50">
+                                <div
+                                    key={paper.id}
+                                    onClick={async () => {
+                                        setLoading(true);
+                                        try {
+                                            const fullPaper = await getNeetAssessmentById(paper.id);
+                                            if (fullPaper) {
+                                                setGeneratedPaper({
+                                                    total: fullPaper.questions.length,
+                                                    questions: fullPaper.questions,
+                                                    topics: fullPaper.config.topics,
+                                                    password: fullPaper.config.password
+                                                });
+                                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                                            } else {
+                                                toast.error("Failed to load paper details");
+                                            }
+                                        } catch (e) {
+                                            toast.error("Error loading paper");
+                                        } finally {
+                                            setLoading(false);
+                                        }
+                                    }}
+                                    className="border border-slate-200 rounded-xl p-4 hover:shadow-md transition bg-slate-50 cursor-pointer hover:bg-white hover:border-indigo-300 group"
+                                >
                                     <div className="flex items-center gap-3 mb-2">
-                                        <div className="bg-white p-2 rounded-lg border border-slate-200">
+                                        <div className="bg-white p-2 rounded-lg border border-slate-200 group-hover:border-indigo-200 transition-colors">
                                             <FileText size={20} className="text-indigo-600" />
                                         </div>
-                                        <div>
+                                        <div className="flex-1 min-w-0">
                                             <h4 className="font-semibold text-slate-800 text-sm truncate w-full">{paper.title}</h4>
                                             <span className="text-xs text-slate-500">{new Date(paper.createdAt).toLocaleDateString()}</span>
                                         </div>
                                     </div>
-                                    <div className="flex justify-between items-center text-xs font-medium text-slate-600 mt-2 pt-2 border-t border-slate-200">
+                                    <div className="flex justify-between items-center text-xs font-medium text-slate-600 mt-2 pt-2 border-t border-slate-200 group-hover:border-slate-100">
                                         <span>{paper.questionCount} Questions</span>
-                                        <span className="bg-white px-2 py-1 rounded border border-slate-200">{paper.config.duration} Mins</span>
+                                        <span className="bg-white px-2 py-1 rounded border border-slate-200 group-hover:border-indigo-100">{paper.config.duration} Mins</span>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </main>
         </div>
     );

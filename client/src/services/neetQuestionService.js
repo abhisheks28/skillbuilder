@@ -261,11 +261,31 @@ export const saveNeetAssessment = async (payload, teacherUid) => {
  */
 export const getNeetAssessments = async (subject, teacherUid) => {
     try {
-        const response = await fetch(`/api/neet/${subject}/assessments?teacherUid=${teacherUid}`);
+        let url = `/api/neet/${subject}/assessments`;
+        if (teacherUid) {
+            url += `?teacherUid=${teacherUid}`;
+        }
+        const response = await fetch(url);
         if (!response.ok) return [];
         return await response.json();
     } catch (error) {
         console.error('Error fetching assessments:', error);
         return [];
+    }
+};
+
+/**
+ * Get full assessment by ID
+ * @param {string} id 
+ * @returns {Promise<Object>}
+ */
+export const getNeetAssessmentById = async (id) => {
+    try {
+        const response = await fetch(`/api/neet/assessment/${id}`);
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching assessment by ID:', error);
+        return null;
     }
 };
