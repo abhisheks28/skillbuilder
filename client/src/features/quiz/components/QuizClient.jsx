@@ -14,7 +14,7 @@ import getRandomInt from "@/utils/workload/GetRandomInt";
 import GetGrade1Question, { fetchAllGrade1Questions } from "@/questionBook/Grade1/GetGrade1Question";
 import GetGrade2Question, { fetchAllGrade2Questions } from "@/questionBook/Grade2/GetGrade2Question";
 import GetGrade3Question, { fetchAllGrade3Questions } from "@/questionBook/Grade3/GetGrade3Question";
-import GetGrade4Question from "@/questionBook/Grade4/GetGrade4Question";
+import GetGrade4Question, { fetchAllGrade4Questions } from "@/questionBook/Grade4/GetGrade4Question";
 import GetGrade5Question from "@/questionBook/Grade5/GetGrade5Question";
 import GetGrade6Question from "@/questionBook/Grade6/GetGrade6Question";
 import GetGrade10Question from "@/questionBook/Grade10/GetGrade10Question";
@@ -227,13 +227,14 @@ const QuizClient = () => {
             setGenerationStarted(true);
             let generatedPaper = [];
 
-            if (userGrade === "Grade 1" || userGrade === "Grade 2" || userGrade === "Grade 3") {
+            if (userGrade === "Grade 1" || userGrade === "Grade 2" || userGrade === "Grade 3" || userGrade === "Grade 4") {
                 try {
                     const gradeNum = userGrade.split(" ")[1];
                     let fetchFunc;
                     if (gradeNum === "1") fetchFunc = fetchAllGrade1Questions;
                     else if (gradeNum === "2") fetchFunc = fetchAllGrade2Questions;
                     else if (gradeNum === "3") fetchFunc = fetchAllGrade3Questions;
+                    else if (gradeNum === "4") fetchFunc = fetchAllGrade4Questions;
                     console.log("[QuizClient] gradeNum:", gradeNum, "fetchFunc:", fetchFunc ? "defined" : "undefined");
                     const allQuestions = await fetchFunc(5); // 5 per topic for assessment
                     console.log("[QuizClient] allQuestions received:", allQuestions ? "yes" : "no");
